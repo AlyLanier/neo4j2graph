@@ -1,3 +1,12 @@
 data
 plugins
 .venv
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+.Python
+env/
+build/
+dist/
+*.egg-info/
