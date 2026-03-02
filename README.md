@@ -1,13 +1,16 @@
 # arcane2graph
 
-## Executer arcane en sequentiel avec les options suivantes
+A set of utilities for running Arcane sequentially, converting its outputs, and loading results into a Neo4j graph database.
+
+## Running Arcane sequentially
+Use the following Arcane options when you need a non‑interactive/export run:
 ```
 -A,export_format=xml,export_output_directory=[path],export_only=true
 ```
-!!! export_only sert à tuer le processus avant le lancement de la simultation en provoquant une erreur, l'erreur est donc normale.
+> The `export_only` option causes Arcane to terminate before the simulation starts by raising an error. This is intentional and expected. The error simply stops execution once the XML export is complete.
 
 
-## Convertir les configs .xml extraites via arcane en .json
+## Converting extracted XML configs to JSON
 ```
 python merge.py
 ```
@@ -17,54 +20,45 @@ python merge.py
 2. Merges the JSON data into Neo4j
 3. Imports AXL export files into Neo4j
 
-## Installation & Setup with pip
+## Installation & Setup
+The easiest way to get started is to install the published package from PyPI:
 
-### Quick Start (First Time Only)
-
-1. **Create a local virtual environment:**
 ```bash
-python3 -m venv .venv
+pip install arcane2graph
 ```
 
-2. **Activate it (Linux/Ubuntu Bash):**
+Optionally create a virtual environment for development or isolation:
+
 ```bash
-source .venv/bin/activate
+python -m venv .venv
+# activate the environment:
+source .venv/bin/activate        # macOS/Linux
+.\.venv\Scripts\activate      # Windows
+pip install arcane2graph         # or `pip install -e .` when working on the code
 ```
 
-3. **Install the package:**
-```bash
-pip install -e .
-```
+Once installed, the `arcane2graph` command is available on your PATH:
 
-### Running the Package
-
-**After activation (recommended):**
 ```bash
-source .venv/bin/activate
 arcane2graph --help
 arcane2graph --xml-path ./xml --json-path ./arc_json --neo4j-password password
 ```
 
-**Without activation (one-off commands):**
-```bash
-./.venv/bin/arcane2graph --help
-./.venv/bin/arcane2graph --xml-path ./xml
-```
+For a one‑off invocation without activating the env, call the binary directly:
 
-### What This Does
-- Creates an isolated `.venv/` folder in your project
-- Installs the package locally without affecting other projects
-- Makes the `arcane2graph` command available
-- The `-e` flag installs in development mode (changes to code take effect immediately)
+```bash
+./.venv/bin/arcane2graph --xml-path ./xml          # Linux/macOS
+.\.venv\Scripts\arcane2graph --xml-path .\xml   # Windows
+```
 
 ---
 
-## convertir les .axl en .json via axlstar
+## Converting .axl to JSON via axlstar
 ```
 axl2ccT4 -l json -o \[output_path\] \[path_to_axl\]/Mahyco.axl
 ```
 
-## Déploiement docker
+## Docker deployment
 ```
 docker run \
     -d \
@@ -79,16 +73,16 @@ docker run \
     neo4j:5.26
 ```
 
-## Remplir la BDD
+## Populating the database
 
-Lancer **`merge.py`** qui exécute maintenant les trois étapes :
-1. Conversion des fichiers XML en JSON
-2. Fusion des données JSON dans Neo4j
-3. Import des fichiers AXL export dans Neo4j
+Run **`merge.py`**; the script now performs all three steps in one execution:
+1. Convert XML files to JSON
+2. Merge the JSON data into Neo4j
+3. Import any AXL export files into Neo4j
 
-Une seule exécution du script suffit.
+One run of the script is sufficient.
 
-### Arguments de merge.py
+### merge.py options
 ```
 python merge.py [OPTIONS]
 
@@ -101,7 +95,7 @@ Options:
   --neo4j-password PASSWORD     Neo4j password (default: password)
 ```
 
-### Exemples
+### Examples
 ```bash
 python merge.py --xml-path ./config/xml --json-path ./config/json --neo4j-uri bolt://localhost:7687 --neo4j-username neo4j --neo4j-password password
 ```
@@ -111,13 +105,13 @@ python merge.py --xml-path ./config/xml --json-path ./config/json --neo4j-uri bo
 http://localhost:7474/browser/
 ```
 
-## couple specification instance pour l'option nommée ...
+## Sample specification query for a named option
 ```
 MATCH p=(o: Option {fullName: "Mahyco/boundary-condition"})-[r:SPECIFIES]->()
 return p
 ```
 
-## Couverture de toutes les options
+## Coverage of all options
 ```
 MATCH (o)-[:SPECIFIES]->(n)
 WITH apoc.map.clean(properties(n), ['uid'], []) AS props, coalesce(o.fullName, o.name) AS name
