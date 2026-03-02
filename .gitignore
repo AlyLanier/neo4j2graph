@@ -1,13 +1,53 @@
-data
-plugins
+# Virtual environments
 .venv
-__pycache__
+venv/
+env/
+ENV/
+
+# Python cache and compiled files
+__pycache__/
 *.pyc
 *.pyo
 *.pyd
 .Python
-env/
+arcane2graph/__pycache__/
+
+# Distribution / packaging
 build/
 dist/
 *.egg-info/
-arcane2graph/__pycache__/
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS-specific files
+.DS_Store
+Thumbs.db
+
+# Environment variables
+.env
+.env.local
+.env.*.local
+
+# Neo4j data (from docker setup)
+data/
+plugins/
+
+# Input/output directories
+xml/
+
+# Testing
+.pytest_cache/
+htmlcov/
+.coverage
+.mypy_cache/
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# UV lock file
+uv.lock
