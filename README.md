@@ -9,8 +9,55 @@
 
 ## Convertir les configs .xml extraites via arcane en .json
 ```
-python converToJson.py
+python merge.py
 ```
+
+**Note:** The `merge.py` script now handles both XML-to-JSON conversion and database import in a single command. The script automatically:
+1. Converts XML files from `./xml` to JSON in `./arc_json`
+2. Merges the JSON data into Neo4j
+3. Imports AXL export files into Neo4j
+
+## Installation & Setup with pip
+
+### Quick Start (First Time Only)
+
+1. **Create a local virtual environment:**
+```bash
+python3 -m venv .venv
+```
+
+2. **Activate it (Linux/Ubuntu Bash):**
+```bash
+source .venv/bin/activate
+```
+
+3. **Install the package:**
+```bash
+pip install -e .
+```
+
+### Running the Package
+
+**After activation (recommended):**
+```bash
+source .venv/bin/activate
+arcane2graph --help
+arcane2graph --xml-path ./xml --json-path ./arc_json --neo4j-password password
+```
+
+**Without activation (one-off commands):**
+```bash
+./.venv/bin/arcane2graph --help
+./.venv/bin/arcane2graph --xml-path ./xml
+```
+
+### What This Does
+- Creates an isolated `.venv/` folder in your project
+- Installs the package locally without affecting other projects
+- Makes the `arcane2graph` command available
+- The `-e` flag installs in development mode (changes to code take effect immediately)
+
+---
 
 ## convertir les .axl en .json via axlstar
 ```
@@ -34,7 +81,30 @@ docker run \
 
 ## Remplir la BDD
 
-Lancer ```merge.py``` en premier puis ```export_axl.py```
+Lancer **`merge.py`** qui exécute maintenant les trois étapes :
+1. Conversion des fichiers XML en JSON
+2. Fusion des données JSON dans Neo4j
+3. Import des fichiers AXL export dans Neo4j
+
+Une seule exécution du script suffit.
+
+### Arguments de merge.py
+```
+python merge.py [OPTIONS]
+
+Options:
+  --xml-path PATH               Path to XML input directory (default: ./xml)
+  --json-path PATH              Path to JSON directory - output of conversion and input for merge (default: ./arc_json)
+  --skip-convert                Skip XML to JSON conversion step (default: false)
+  --neo4j-uri URI               Neo4j connection URI (default: bolt://localhost:7687)
+  --neo4j-username USERNAME     Neo4j username (default: neo4j)
+  --neo4j-password PASSWORD     Neo4j password (default: password)
+```
+
+### Exemples
+```bash
+python merge.py --xml-path ./config/xml --json-path ./config/json --neo4j-uri bolt://localhost:7687 --neo4j-username neo4j --neo4j-password password
+```
 
 ## Interface web
 ```
