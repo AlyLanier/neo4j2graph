@@ -5,7 +5,7 @@ LEAF_NODE_TYPES = (str, int, float, bool, type(None))
 
 class ExactNode:
 
-    def __init__(self, name, value, node_id):
+    def __init__(self, name, value, node_id = None, ):
         self.n = name
         self.v = value
         self.n_id = node_id
@@ -45,6 +45,9 @@ class TCM:
     def __init__(self, file_path, node_id = -1):
         self.node_id = node_id
         self.nodes, self.edges = self.json_to_tcm(file_path)
+    
+
+    ################# Loading data from json file #################
 
     def json_to_tcm(self, file):
         with open(file, "r", encoding="utf-8") as f:
@@ -55,28 +58,8 @@ class TCM:
         
         return self.nodify(data)
     
-    def get_nodes(self):
-        return self.nodes
 
-    def get_edges(self):
-        return self.edges
-    
-    def get_model(self):
-        return self.get_nodes(), self.get_edges()
-    
-    def get_node_id(self):
-        return self.node_id
-    
-    def get_next_node_id(self):
-        self.node_id += 1
-        return self.get_node_id()
-
-    def create_node(self, label, value):
-        return ExactNode(label, value, self.get_next_node_id())
-    
-    def create_edge(self, source, target):
-        return ExactEdge(source, target)
-
+    ############ functions to transform data into Test Case Model ###########
 
     def nodify(self, data):
         data = data['case']['mahyco']
@@ -106,7 +89,34 @@ class TCM:
         
         nodes.append(new_node)
         edges.append(self.create_edge(mother_node, new_node))
-        
+    
+    
+    ###################### getters & node-edge creators ####################
+    
+    def get_nodes(self):
+        return self.nodes
+
+    def get_edges(self):
+        return self.edges
+    
+    def get_model(self):
+        return self.get_nodes(), self.get_edges()
+    
+    def get_node_id(self):
+        return self.node_id
+    
+    def get_next_node_id(self):
+        self.node_id += 1
+        return self.get_node_id()
+
+    def create_node(self, label, value):
+        return ExactNode(label, value, self.get_next_node_id())
+    
+    def create_edge(self, source, target):
+        return ExactEdge(source, target)
+
+    
+    ################# Visualize Graph ######################        
 
     def show_tcm(self, alinea_length = 4, search_root=False):
         nodes, edges = self.get_model()
@@ -127,6 +137,8 @@ class TCM:
         return return_string
 
 
+    ################ searching root of graph ################
+
     def search_root(self, start_node = 0):
         return self.search_root_rec(self.get_nodes()[start_node])
 
@@ -135,11 +147,7 @@ class TCM:
             if edge.target() == current_node:
                 return self.search_root_rec(edge.source(), edges)
         return current_node
-
-
-def process_folder(folder_path):
-    return
-
+        
 
 
 def main():
