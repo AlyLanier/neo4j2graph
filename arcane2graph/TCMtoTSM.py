@@ -1,3 +1,4 @@
+import hashlib
 from jsonToTestCaseModel import TCM, ExactEdge, ExactNode
 
 class TSM:
@@ -86,7 +87,7 @@ class TSM:
         self.add_value_node(new_v_node)
 
         tcm_mother_node = self.find_node_from_edge(tcm_edges, current_node, from_source : False)
-        if tcm_mother_node is not None  : tsm_mother_v_node = self.find_node_from_identifier(v_nodes, tcm_mother_node)
+        if tcm_mother_node   is not None: tsm_mother_v_node = self.find_node_from_identifier(v_nodes, tcm_mother_node)
         if tsm_mother_v_node is not None: tsm_mother_s_node = self.spec(tsm_mother_v_node)
         if tsm_mother_s_node is not None: tsm_s_node = self.find_node_from_edge(self.get_containment_edges(), tsm_mother_s_node, from_source : True)
     
