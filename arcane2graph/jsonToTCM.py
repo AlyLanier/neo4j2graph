@@ -1,9 +1,12 @@
 import os
 import json
+import hashlib
 
-LEAF_NODE_TYPES = (str, int, float, bool, type(None))
+NODE_SIMPLE_TYPES = (str, int, float, bool, type(None))
+NODE_COMPOSITE_TYPES = (dict, list)
+NODE_TYPES = (*NODE_SIMPLE_TYPES, *NODE_COMPOSITE_TYPES)
 
-class ExactNode:
+class Node:
 
     def __init__(self, name, value, node_id = None, path = None):
         self.n = name
@@ -32,9 +35,17 @@ class ExactNode:
     
     def set_signature(self, sig):
         self.signature = sig
+    
+    ############### hash function ###########################
+
+    def hash_code(self):
+        return hashlib.md5(repr((self.get_path(), self.get_signature())).encode()).hexdigest()
+    
+    def get_identifier(self)
+        return self.hash_code()
 
 
-class ExactEdge:
+class Edge:
     def __init__(self, source, target):
         self.src = source
         self.tgt = target
@@ -85,7 +96,7 @@ class TCM:
             signature_items.append(self.process_node(k, v, mother_node, nodes, edges, current_path))
         
         signature = (mother_node.name(), (data_type, sorted(signature_items))) # or not add name here but just for return
-        mother_node.set_signature(signature) 
+        mother_node.set_signature(signature) # ie signature[1] TODO
         return signature
 
 
@@ -97,7 +108,7 @@ class TCM:
         
         if isinstance(v, LEAF_NODE_TYPES):
             signature = (k, ("s", v)) # or not add k here but just for return
-            new_node.set_signature(signature) # ie signature[1]
+            new_node.set_signature(signature) # ie signature[1] TODO
         else:
             signature = self.nodify_rec(v, new_node, nodes, edges, new_path)
         
@@ -137,10 +148,10 @@ class TCM:
         return self.get_node_id()
 
     def create_node(self, label, value, path):
-        return ExactNode(label, value, self.get_next_node_id(), path)
+        return Node(label, value, self.get_next_node_id(), path)
     
     def create_edge(self, source, target):
-        return ExactEdge(source, target)
+        return Edge(source, target)
 
     
     ################# Visualize Graph ######################        
@@ -174,6 +185,8 @@ class TCM:
             if edge.target() == current_node:
                 return self.search_root_rec(edge.source(), edges)
         return current_node
+    
+
         
 
 
