@@ -82,7 +82,7 @@ class TSM:
         return TSM.find_node_from_edge(self.get_specification_edges(), v_node, True)
     
     def ceps(self, s_node):
-        return [edge.source() for edge in self.get_specification_edges() if edge.target() == s_node]
+        return TSM.find_parents(s_node, self.get_specification_edges())
     
 
     ################ node finder #############################
@@ -106,6 +106,14 @@ class TSM:
         for obj in in_this_list:
             if condition(obj): return return_value(obj)
         return None
+    
+    @staticmethod
+    def find_parents(node, edge_list):
+        return [edge.source() for edge in edge_list if edge.target() == node]
+    
+    @staticmethod
+    def find_children(node, edge_list):
+        return [edge.target() for edge in edge_list if edge.source() == node]
 
 
     ################ expand Test Suite Model with TCM #####################
@@ -137,7 +145,7 @@ class TSM:
             self.add_specification_node(new_s_node)
             self.add_containment_edge(tsm_mother_s_node, new_s_node)
         
-        current_node_children = [edge.target() for edge in tcm_edges if edge.source() == current_node]
+        current_node_children = TSM.find_children(current_node, tcm_nodes)
         for current_node_child in current_node_children:
             self.process_option_value(current_node_child, tcm_nodes, tcm_edges)
             tsm_v_node_child = TCM.find_node_from_hash(v_nodes, current_node_child)
@@ -149,7 +157,7 @@ class TSM:
     def option_coverage(self, current_s_node):
         if current_s_node.stype() not in NODE_COMPOSITE_TYPES: return self.ceps(current_s_node)
 
-        s_node_parents = [edge.source() for edge in self.get_containment_edges() if edge.target() == current_s_node]
+        s_node_parents = TSM.find_children(current_s_node, self.get_containment_edges())
         res = []
         for s_node in s_node_parents:
             res += self.option_coverage(s_node)
@@ -158,8 +166,8 @@ class TSM:
 
     ################# TSM Slicing ##################
 
-    def Slicing(self, value_nodes): #TODO
-        return
+    def slicing(self, value_nodes): #TODO
+        
     
 
     ################# Option Value Prevalence #############
