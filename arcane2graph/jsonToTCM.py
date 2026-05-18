@@ -41,7 +41,7 @@ class Node:
     def hash_code(self):
         return hashlib.md5(repr((self.get_path(), self.get_signature())).encode()).hexdigest()
     
-    def get_identifier(self)
+    def get_identifier(self):
         return self.hash_code()
 
 
@@ -106,7 +106,7 @@ class TCM:
         nodes.append(new_node)
         edges.append(self.create_edge(mother_node, new_node))
         
-        if isinstance(v, LEAF_NODE_TYPES):
+        if isinstance(v, NODE_SIMPLE_TYPES):
             signature = (k, ("s", v)) # or not add k here but just for return
             new_node.set_signature(signature) # ie signature[1] TODO
         else:
