@@ -96,21 +96,23 @@ class TCM:
             signature_items.append(self.process_node(k, v, mother_node, nodes, edges, current_path))
         
         signature = (mother_node.name(), (data_type, sorted(signature_items))) # or not add name here but just for return
-        mother_node.set_signature(signature) # ie signature[1] TODO
+        mother_node.set_signature(signature) # ie signature[1] TODO ?
         return signature
 
 
     def process_node(self, k, v, mother_node, nodes, edges, current_path):
         new_path = f"{current_path}.{k}"
-        new_node = self.create_node(k, v, new_path)
-        nodes.append(new_node)
-        edges.append(self.create_edge(mother_node, new_node))
         
         if isinstance(v, NODE_SIMPLE_TYPES):
+            new_node = self.create_node(k, v, new_path)
             signature = (k, ("s", v)) # or not add k here but just for return
-            new_node.set_signature(signature) # ie signature[1] TODO
+            new_node.set_signature(signature) # ie signature[1] TODO ?
         else:
+            new_node = self.create_node(k, None, new_path)
             signature = self.nodify_rec(v, new_node, nodes, edges, new_path)
+        
+        nodes.append(new_node)
+        edges.append(self.create_edge(mother_node, new_node))
         
         return signature
     

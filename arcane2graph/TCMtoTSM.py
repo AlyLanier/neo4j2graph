@@ -10,6 +10,9 @@ class SNode:
     def __repr__(self):
         return f"SN({self.name()}, {self.stype()})"
     
+    def get_identifier(self) #for neo4j
+        return id(self)
+    
     def name(self):
         return self.n
 
@@ -38,6 +41,9 @@ class TSM:
             self.expand_tsm(test_case)
     
     ################### getters & list appends ###################
+
+    def get_model(self):
+        return self.get_value_nodes(), self.get_specification_nodes(), self.get_containment_edges(), self.get_specification_edges()
 
     def get_value_nodes(self):
         return self.v_nodes
@@ -125,8 +131,8 @@ class TSM:
     def find_node_from_edge(edge_list, match_value, from_source):
         if from_source is None: return None
         
-        if from_source: functions = lambda edge : edge.source() == match_value, lambda edge : edge.target()
-        else:           functions = lambda edge : edge.target() == match_value, lambda edge : edge.source()
+        if from_source: functions = (lambda edge : edge.source() == match_value), (lambda edge : edge.target())
+        else:           functions = (lambda edge : edge.target() == match_value), (lambda edge : edge.source())
 
         return TSM.find_node(edge_list, *functions)
 
@@ -173,7 +179,7 @@ class TSM:
         new_v_node = TSM.create_v_node(current_node.get_identifier(), current_node.val())
         self.add_value_node(new_v_node)
 
-        tsm_mother_v_node, tsm_mother_s_node, tsm_s_node = [], [], []
+        tsm_mother_v_node, tsm_mother_s_node, tsm_s_node = None, None, None
         tcm_mother_node = TSM.find_node_from_edge(tcm_edges, current_node, from_source = False)
         if tcm_mother_node   is not None: tsm_mother_v_node = TSM.find_node_from_hash(v_nodes, tcm_mother_node)
         if tsm_mother_v_node is not None: tsm_mother_s_node = self.spec(tsm_mother_v_node)
@@ -188,10 +194,10 @@ class TSM:
             self.add_specification_node(new_s_node)
             self.add_containment_edge(tsm_mother_s_node, new_s_node)
         
-        current_node_children = TSM.find_children(current_node, tcm_nodes)
+        current_node_children = TSM.find_children(current_node, tcm_edges)
         for current_node_child in current_node_children:
             self.process_option_value(current_node_child, tcm_nodes, tcm_edges)
-            tsm_v_node_child = TCM.find_node_from_hash(v_nodes, current_node_child)
+            tsm_v_node_child = TSM.find_node_from_hash(v_nodes, current_node_child)
             self.add_containment_edge(new_v_node, tsm_v_node_child)
         
     
