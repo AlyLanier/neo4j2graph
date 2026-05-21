@@ -11,15 +11,11 @@ class Node:
     def __init__(self, name, value, node_id = None, path = None):
         self.n = name
         self.v = value
-        self._id = node_id
         self.path = path
         self.signature = None
     
     def __repr__(self):
         return f"N({self.name()}, {self.val()})"
-    
-    def repr_for_edge(self):
-        return f"#{self._id}"
     
     def name(self):
         return self.n
@@ -51,7 +47,7 @@ class Edge:
         self.tgt = target
     
     def __repr__(self):
-        return f"E({self.source().repr_for_edge()} -> {self.target().repr_for_edge()})"
+        return f"E({self.source()} -> {self.target()})"
     
     def source(self):
         return self.src
@@ -95,8 +91,8 @@ class TCM:
         for k, v in generator:
             signature_items.append(self.process_node(k, v, mother_node, nodes, edges, current_path))
         
-        signature = (mother_node.name(), (data_type, sorted(signature_items))) # or not add name here but just for return
-        mother_node.set_signature(signature) # ie signature[1] TODO ?
+        signature = (mother_node.name(), (data_type, sorted(signature_items)))
+        mother_node.set_signature(signature[1])
         return signature
 
 
@@ -104,11 +100,11 @@ class TCM:
         new_path = f"{current_path}.{k}"
         
         if isinstance(v, NODE_SIMPLE_TYPES):
-            new_node = self.create_node(k, v, new_path)
-            signature = (k, ("s", v)) # or not add k here but just for return
-            new_node.set_signature(signature) # ie signature[1] TODO ?
+            new_node = self.create_node(k, v, current_path)
+            signature = (k, ("s", v))
+            new_node.set_signature(signature[1])
         else:
-            new_node = self.create_node(k, None, new_path)
+            new_node = self.create_node(k, None, current_path)
             signature = self.nodify_rec(v, new_node, nodes, edges, new_path)
         
         nodes.append(new_node)
