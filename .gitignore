@@ -52,4 +52,4 @@ htmlcov/
 # UV lock file
 uv.lock
 
-test.py
+test.*
