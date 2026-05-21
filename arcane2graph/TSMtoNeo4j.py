@@ -12,7 +12,7 @@ def sanitize(obj):
     return obj
 
 def v_node_creation_query(node):
-    return f"CREATE ({STARTING_CHAR}{node.get_identifier()}:ValueNode {{value: {sanitize(node.val())}}})"
+    return f"CREATE ({STARTING_CHAR}{node.get_identifier()}:ValueNode {{value: {sanitize(node.val())}, identifier: {sanitize(node.get_identifier())}}})"
     #                 ^^^^^^^^^^^^^ -- to make it so the identifier does not start with a number, neo4j does not like it
 
 def s_node_creation_query(node):
