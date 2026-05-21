@@ -3,14 +3,15 @@ import os
 from jsonToTCM import TCM, Edge, NODE_COMPOSITE_TYPES
 
 class SNode:
-    def __init__(self, name, stype):
+    def __init__(self, name, stype, path = ""):
         self.n = name
         self.t = stype
+        self.p = path
     
     def __repr__(self):
-        return f"SN({self.name()}, {self.stype()})"
+        return f"SN({self.name()}, {self.stype().__name__})"
     
-    def get_identifier(self) #for neo4j
+    def get_identifier(self): #for neo4j
         return id(self)
     
     def name(self):
@@ -19,13 +20,19 @@ class SNode:
     def stype(self):
         return self.t
     
+    def stype_name(self):
+        return self.t.__name__
+
+    def set_stype(self, t):
+        self.t = t
+    
 class VNode:
     def __init__(self, identifier, value):
         self.i = identifier
         self.v = value
     
     def __repr__(self):
-        return f"VN({self.get_identifier()}, {self.val()})"
+        return f"VN({self.val()})"
     
     def get_identifier(self):
         return self.i
@@ -93,8 +100,8 @@ class TSM:
     ############### Create node or edge #######################
     
     @staticmethod
-    def create_s_node(name, stype):
-        return SNode(name, stype)
+    def create_s_node(name, stype, path):
+        return SNode(name, stype, path)
 
     @staticmethod
     def create_v_node(ident, value):
@@ -176,7 +183,7 @@ class TSM:
         for v_node in v_nodes:
             if v_node.get_identifier() == current_node.get_identifier(): return
 
-        new_v_node = TSM.create_v_node(current_node.get_identifier(), current_node.val())
+        new_v_node = TSM.create_v_node(current_node.get_identifier(), TSM.value_cast(current_node.val()))
         self.add_value_node(new_v_node)
 
         tsm_mother_v_node, tsm_mother_s_node, tsm_s_node = None, None, None
@@ -187,19 +194,46 @@ class TSM:
     
             
         if tsm_s_node is not None and tsm_s_node.name() == current_node.name():
+            TSM.process_type(current_node, tsm_s_node)
             self.add_specification_edge(new_v_node, tsm_s_node)
         else:
-            new_s_node = TSM.create_s_node(current_node.name(), type(current_node.val()))
+            new_s_node = TSM.create_s_node(current_node.name(), type(TSM.value_cast(current_node.val())), current_node.get_path())
             self.add_specification_edge(new_v_node, new_s_node)
             self.add_specification_node(new_s_node)
-            self.add_containment_edge(tsm_mother_s_node, new_s_node)
+            if tsm_mother_s_node is not None: self.add_containment_edge(tsm_mother_s_node, new_s_node)
         
         current_node_children = TSM.find_children(current_node, tcm_edges)
         for current_node_child in current_node_children:
             self.process_option_value(current_node_child, tcm_nodes, tcm_edges)
             tsm_v_node_child = TSM.find_node_from_hash(v_nodes, current_node_child)
             self.add_containment_edge(new_v_node, tsm_v_node_child)
+    
+    @staticmethod
+    def process_type(current_node, tsm_s_node):
+        current_node_valtype = type(TSM.value_cast(current_node.val()))
+        tsm_s_nodetype = tsm_s_node.stype()
+        #change NoneType to current_node type if not None
+        if tsm_s_nodetype == type(None) and current_node.val() is not None: tsm_s_node.set_stype(current_node_valtype)
         
+        #check types and print warning if not correct
+        if tsm_s_nodetype != current_node_valtype and current_node.val() is not None:
+            if tsm_s_nodetype == bool and current_node_valtype in [int, float]:
+                tsm_s_node.set_stype(current_node_valtype)
+            elif tsm_s_nodetype in [bool, int] and current_node_valtype == float:
+                tsm_s_node.set_stype(current_node_valtype)
+            else: print(f"[WARNING] TCM node {current_node} has value type {current_node_valtype}, expected {tsm_s_nodetype}")
+
+    @staticmethod
+    def value_cast(obj):
+        if isinstance(obj, str):
+            if obj == "0": return False
+            if obj == "1": return True
+
+            try: return int(obj)
+            except: pass
+            try: return float(obj)
+            except: pass
+        return obj
     
     ################# Option Coverage ##################
 
@@ -285,6 +319,11 @@ class TSM:
     def compute_prevalence(self): #TODO
         return
     
+
+    ################# save/load tsm #################
+
+def load_tsm_from_neo4j_database(driver): #TODO
+    return
 
 
 def main():
