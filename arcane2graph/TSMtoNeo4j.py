@@ -23,7 +23,7 @@ def edge_creation_query(edge, relation):
 
 def TSM_creation_query(tsm):
     query = ""
-    
+
     for node in tsm.get_value_nodes():
         query += v_node_creation_query(node) + "\n"
     
@@ -36,16 +36,8 @@ def TSM_creation_query(tsm):
     for edge in tsm.get_specification_edges():
         query += edge_creation_query(edge, ":IS_SPECIFIED_BY") + "\n"
     
+    print(query)
     return query
-
-def save_query(query, file_name = "arcane2graph/queries/test.txt"):
-    with open(file_name, 'w', encoding='unicode-escape') as f:
-        f.write(query)
-    print(f"saved query in .../{file_name}")
-
-def load_query(file_name = "arcane2graph/queries/test.txt"):
-    with open(file_name, 'r', encoding='unicode-escape') as f:
-        return f.read()
 
 
 def build_tsm():
@@ -62,18 +54,10 @@ def build_tsm():
     
     return TSM(processed_json)
 
-def main(is_query = False, is_save_query = False, query_filename = ""):
-    if is_query:
-        string_for_neo4j = load_query(query_filename)
-    else:
-        test_tsm = build_tsm()
-        string_for_neo4j = TSM_creation_query(test_tsm)
-        if is_save_query:
-            try:
-                save_query(string_for_neo4j, query_filename)
-            except Exception as e:
-                print(f"query was not saved [ERROR] : {e}")
-    #print(string_for_neo4j)
+def main():
+    
+    test_tsm = build_tsm()
+    string_for_neo4j = TSM_creation_query(test_tsm)
     
 
     # URI examples: "neo4j://localhost", "neo4j+s://xxx.databases.neo4j.io"
@@ -84,6 +68,7 @@ def main(is_query = False, is_save_query = False, query_filename = ""):
         driver.verify_connectivity()
         # remove current graph
         driver.execute_query("MATCH (p)\nDETACH DELETE p")
+        print("deleted previous db")
 
         # build graph here
         driver.execute_query(string_for_neo4j)
@@ -91,5 +76,4 @@ def main(is_query = False, is_save_query = False, query_filename = ""):
         
 
 if __name__ == '__main__':
-    #main(is_query = True, query_filename = "arcane2graph/queries/test.txt")
-    main(is_save_query = True, query_filename = "arcane2graph/queries/test.txt")
+    main()

@@ -1,15 +1,13 @@
-import statistics
 import os
 from jsonToTCM import TCM, Edge, NODE_COMPOSITE_TYPES
 
 class SNode:
-    def __init__(self, name, stype, path = ""):
+    def __init__(self, name, stype):
         self.n = name
         self.t = stype
-        self.p = path
     
     def __repr__(self):
-        return f"SN({self.name()}, {self.stype().__name__})"
+        return f"SN({self.name()}, {self.stype_name()})"
     
     def get_identifier(self): #for neo4j
         return id(self)
@@ -39,6 +37,9 @@ class VNode:
 
     def val(self):
         return self.v
+    
+    def cast(self, typ):
+        self.v = typ(self.v)
 
 class TSM:
 
@@ -82,26 +83,13 @@ class TSM:
     
     def get_containment_specification_edges(self):
         return [edge for edge in self.get_containment_edges() if isinstance(edge.source(), SNode)]
-
-
-    ############# ????????????????????? ###################
-
-    def is_root(self, node):
-        return [] == TSM.find_parents(node, self.get_containment_edges())
-    
-    def is_all_root(self, nodes):
-        for node in nodes:
-            if not self.is_root(node):
-                return False
-        return True
-
     
 
     ############### Create node or edge #######################
     
     @staticmethod
-    def create_s_node(name, stype, path):
-        return SNode(name, stype, path)
+    def create_s_node(name, stype):
+        return SNode(name, stype)
 
     @staticmethod
     def create_v_node(ident, value):
@@ -115,7 +103,7 @@ class TSM:
     ################ SPEC binary relation ##################
     
     def spec(self, node):
-        return TSM.find_node_from_edge(self.get_specification_edges(), node, True)
+        return TCM.find_node_from_edge(self.get_specification_edges(), node, True)
     
     def spec_multi(self, *v_nodes):
         res = []
@@ -124,57 +112,13 @@ class TSM:
         return res
     
     def ceps(self, s_node):
-        return TSM.find_parents(s_node, self.get_specification_edges())
-    
-
-    ################ node/edge finder #############################
-
-    @staticmethod
-    def find_node_from_hash(node_list, node_to_match):
-        condition = lambda node : node.get_identifier() == node_to_match.get_identifier()
-        return TSM.find_node(node_list, condition, lambda x : x)
-
-    @staticmethod
-    def find_node_from_edge(edge_list, match_value, from_source):
-        if from_source is None: return None
-        
-        if from_source: functions = (lambda edge : edge.source() == match_value), (lambda edge : edge.target())
-        else:           functions = (lambda edge : edge.target() == match_value), (lambda edge : edge.source())
-
-        return TSM.find_node(edge_list, *functions)
-
-    @staticmethod
-    def find_node(object_list, condition, return_value):
-        for obj in object_list:
-            if condition(obj): return return_value(obj)
-        return None
-    
-    @staticmethod
-    def find_parents(node, edge_list):
-        return [edge.source() for edge in edge_list if edge.target() == node]
-    
-    @staticmethod
-    def find_children(node, edge_list):
-        return [edge.target() for edge in edge_list if edge.source() == node]
-    
-    @staticmethod
-    def find_edges(edge_list, from_node = None, to_node = None):
-        if from_node is not None and to_node is not None:
-            node_condition = lambda edge : edge.source() == from_node and edge.target() == to_node
-        elif from_node is not None :
-            node_condition = lambda edge : edge.source() == from_node
-        elif to_node is not None:
-            node_condition = lambda edge : edge.target() == to_node
-        else:
-            return edge_list
-        
-        return [edge for edge in edge_list if node_condition(edge)]
+        return TCM.find_parents(s_node, self.get_specification_edges())
 
 
     ################ expand Test Suite Model with TCM #####################
 
     def expand_tsm(self, tcm):
-        tcm_root = tcm.search_root()
+        tcm_root = TCM.search_root(tcm.get_edges())
         self.process_option_value(tcm_root, *tcm.get_model())
         return self
 
@@ -183,147 +127,65 @@ class TSM:
         for v_node in v_nodes:
             if v_node.get_identifier() == current_node.get_identifier(): return
 
-        new_v_node = TSM.create_v_node(current_node.get_identifier(), TSM.value_cast(current_node.val()))
+        new_v_node = TSM.create_v_node(*current_node.get_v_node_creation_info())
         self.add_value_node(new_v_node)
 
-        tsm_mother_v_node, tsm_mother_s_node, tsm_s_node = None, None, None
-        tcm_mother_node = TSM.find_node_from_edge(tcm_edges, current_node, from_source = False)
-        if tcm_mother_node   is not None: tsm_mother_v_node = TSM.find_node_from_hash(v_nodes, tcm_mother_node)
+        tsm_mother_v_node, tsm_mother_s_node, tsm_s_nodes, tsm_filtered_s_node, tsm_s_node = None, None, [], [], None
+        tcm_mother_node = TCM.find_node_from_edge(tcm_edges, current_node, from_source = False)
+        if tcm_mother_node   is not None: tsm_mother_v_node = TCM.find_node_from_hash(v_nodes, tcm_mother_node)
         if tsm_mother_v_node is not None: tsm_mother_s_node = self.spec(tsm_mother_v_node)
-        if tsm_mother_s_node is not None: tsm_s_node = TSM.find_node_from_edge(self.get_containment_edges(), tsm_mother_s_node, from_source = True)
-    
-            
-        if tsm_s_node is not None and tsm_s_node.name() == current_node.name():
-            TSM.process_type(current_node, tsm_s_node)
+        if tsm_mother_s_node is not None: tsm_s_nodes = TCM.find_children(tsm_mother_s_node, self.get_containment_specification_edges())
+        if tsm_s_nodes             != []: tsm_filtered_s_node = list(filter(lambda x: x.name() == current_node.name(), tsm_s_nodes))
+        if tsm_filtered_s_node     != []: tsm_s_node = tsm_filtered_s_node[0]
+
+        if tsm_s_node is not None:
+            #print(f"found specification for node {current_node} : {tsm_s_node}")
+            self.process_type(current_node, tsm_s_node)
             self.add_specification_edge(new_v_node, tsm_s_node)
         else:
-            new_s_node = TSM.create_s_node(current_node.name(), type(TSM.value_cast(current_node.val())), current_node.get_path())
+            if TCM.is_root(current_node, tcm_edges):
+                new_s_node = TCM.search_root(self.get_containment_edges())
+                if new_s_node is None:
+                    new_s_node = TSM.create_s_node(*current_node.get_s_node_creation_info())
+                    self.add_specification_node(new_s_node)
+                    #print(f"did not find root, created node {new_s_node}")
+                #else: print("found root, no need to create it")
+            else:
+                #print(tcm_mother_node, tsm_mother_v_node, tsm_mother_s_node, tsm_s_node)
+                new_s_node = TSM.create_s_node(*current_node.get_s_node_creation_info())
+                #print(f"did not find specification for node {current_node}, created node {new_s_node}")
+                self.add_specification_node(new_s_node)
+                self.add_containment_edge(tsm_mother_s_node, new_s_node)
+
             self.add_specification_edge(new_v_node, new_s_node)
-            self.add_specification_node(new_s_node)
-            if tsm_mother_s_node is not None: self.add_containment_edge(tsm_mother_s_node, new_s_node)
         
-        current_node_children = TSM.find_children(current_node, tcm_edges)
+        current_node_children = TCM.find_children(current_node, tcm_edges)
         for current_node_child in current_node_children:
             self.process_option_value(current_node_child, tcm_nodes, tcm_edges)
-            tsm_v_node_child = TSM.find_node_from_hash(v_nodes, current_node_child)
+            tsm_v_node_child = TCM.find_node_from_hash(v_nodes, current_node_child)
             self.add_containment_edge(new_v_node, tsm_v_node_child)
     
-    @staticmethod
-    def process_type(current_node, tsm_s_node):
-        current_node_valtype = type(TSM.value_cast(current_node.val()))
+    def process_type(self, current_node, tsm_s_node):
+        current_node_valtype = type(current_node.val())
         tsm_s_nodetype = tsm_s_node.stype()
-        #change NoneType to current_node type if not None
-        if tsm_s_nodetype == type(None) and current_node.val() is not None: tsm_s_node.set_stype(current_node_valtype)
         
         #check types and print warning if not correct
         if tsm_s_nodetype != current_node_valtype and current_node.val() is not None:
-            if tsm_s_nodetype == bool and current_node_valtype in [int, float]:
+            if tsm_s_nodetype == type(None) or (tsm_s_nodetype == bool and current_node_valtype in [int, float]) or (tsm_s_nodetype in [bool, int] and current_node_valtype == float):
                 tsm_s_node.set_stype(current_node_valtype)
-            elif tsm_s_nodetype in [bool, int] and current_node_valtype == float:
-                tsm_s_node.set_stype(current_node_valtype)
+                self.update_value_nodes_types(tsm_s_node)
             else: print(f"[WARNING] TCM node {current_node} has value type {current_node_valtype}, expected {tsm_s_nodetype}")
-
-    @staticmethod
-    def value_cast(obj):
-        if isinstance(obj, str):
-            if obj == "0": return False
-            if obj == "1": return True
-
-            try: return int(obj)
-            except: pass
-            try: return float(obj)
-            except: pass
-        return obj
     
-    ################# Option Coverage ##################
-
-    def option_coverage(self, current_s_node):
-        if current_s_node.stype() not in NODE_COMPOSITE_TYPES: return self.ceps(current_s_node)
-
-        s_node_parents = TSM.find_children(current_s_node, self.get_containment_edges())
-        res = []
-        for s_node in s_node_parents:
-            res += self.option_coverage(s_node)
-        return res
-    
-
-    ################# TSM Slicing ##################
-
-    def slicing(self, value_nodes):
-        if value_nodes == [] : return TSM()
-
-        value_nodes = set(value_nodes)
-        if len(value_nodes) == 1 : return one_node_TSM(*value_nodes)
-
-        base_node = value_nodes[0]
-        all_parents = self.ancestors(base_node)
-        edges = self.get_containment_edges()
-        
-        for other_node in value_nodes[1:]:
-            layer = set(other_node)
-            if self.is_process_ancestor_layer(layer, all_parents): continue
-            
-            while not self.is_all_root(layer):
-                layer = self.next_layer(layer)
-                if self.is_process_ancestor_layer(layer, all_parents): break
-            
-        if not all_parents: return None
-        common_parents = all_parents[0]
-        
-        for parent in common_parents:
-            return #TODO
-
-    def one_node_TSM(self, from_value_node):
-        spec_node = self.spec(from_value_node)
-        return TSM(v_nodes = [from_value_node], s_nodes = [spec_node], s_edges = TSM.find_edges(self.get_specification_edges(), *value_nodes, spec_node))
-    
-    def ancestors(self, base_node):
-        all_parents = []
-        
-        layer = set(base_node)
-        edges = self.get_containment_edges()
-        while not self.is_all_root(layer):
-            all_parents.append(layer)
-            new_layer = set()
-            for node in layer:
-                if not self.is_root(node): new_layer.update(TSM.find_parents(node, edges))
-            layer = new_layer
-        all_parents.append(layer)
-
-        return all_parents
-    
-    def is_process_ancestor_layer(self, nodes_layer, ancestor_layers):
-        for node in nodes_layer:
-            cpt = 0
-            for layer_base_node in all_parents:
-                found_parents = [layer_node for layer_node in layer_base_node if node == layer_node]
-                if found_parents:
-                    ancestor_layers[cpt] = found_parents
-                    del ancestor_layers[:cpt]
-                    return True
-                
-                cpt += 1
-        return False
-    
-    def next_layer(self, current_layer):
-        edges = self.get_containment_edges()
-        new_layer = set()
-        for node in current_layer:
-            if not self.is_root(node): new_layer.update(TSM.find_parents(node, edges))
-        return new_layer
-
-    
-
-    ################# Option Value Prevalence #############
-
-    def compute_prevalence(self): #TODO
-        return
-    
-
-    ################# save/load tsm #################
-
-def load_tsm_from_neo4j_database(driver): #TODO
-    return
+    def update_value_nodes_types(self, s_node):
+        if s_node.stype() == type(None): return
+        v_nodes = TCM.find_parents(s_node, self.get_specification_edges())
+        for v_node in v_nodes:
+            v_nodetype = type(v_node.val())
+            s_nodetype = s_node.stype()
+            if v_nodetype != s_nodetype and v_nodetype in [int, float, bool]:
+                print(f"value node type : {v_nodetype} for value {v_node.val()}")
+                v_node.cast(s_nodetype)
+                print(f"value node casted to : {s_nodetype} for value {v_node.val()}")
 
 
 def main():
@@ -339,6 +201,8 @@ def main():
                 break
     
     test_tsm = TSM(processed_json)
+    for s in test_tsm.get_specification_nodes():
+        print(s)
     return
 
 if __name__ == '__main__':
