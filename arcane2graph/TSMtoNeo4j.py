@@ -37,10 +37,11 @@ def TSM_creation_query(tsm):
         query += edge_creation_query(edge, ":IS_SPECIFIED_BY") + "\n"
     
     print(query)
-    return query
+    return query[:-1]
 
 
 def build_tsm():
+    max_process = 1
     json_path = "arc_json"
     processed_json = []
     for filename in os.listdir(json_path):
@@ -49,7 +50,7 @@ def build_tsm():
             print(file_path)
             test = TCM(file_path)
             processed_json.append(test)
-            if len(processed_json) >= 2:
+            if len(processed_json) >= max_process:
                 break
     
     return TSM(processed_json)
