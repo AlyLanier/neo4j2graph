@@ -36,6 +36,9 @@ class Node:
     def get_type(self):
         return (type(self.val()) if self._type is None else self._type)
     
+    def get_stype(self):
+        return self.get_type().__name__
+    
     def set_type(self, t):
         self._type = t
     
