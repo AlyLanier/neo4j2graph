@@ -7,64 +7,63 @@ from functools import reduce
 
 
 class TCMtoDB:
-    creation_match_counter = 0
+    MAX_MATCH_PER_QUERY = 15
+    token_counter = 0
+    final_queries = {"node_creation" : [], "node_matching" : {}, "edge_creation" : []}
 
     ################## Expanding db with a tcm ######################
     @staticmethod
     def expand_neo4j_tsm(driver, db, tcm):
-        queries = [[], []]
+        TCMtoDB.token_counter = 0
+        TCMtoDB.final_queries = {"node_creation" : [], "node_matching" : {}, "edge_creation" : []}
         with driver.session(database = db) as session:
-            TCMtoDB.process_option_value_to_neo4j(session, None, tcm.search_root(tcm.get_edges()), *tcm.get_model(), queries)
-            final_query = ""
-            for query in queries:
-                final_query += reduce(lambda x, y: x + "\n" + y, query)+'\n'
-            #print(final_query)
+            TCMtoDB.process_option_value_to_neo4j(session, None, tcm.search_root(tcm.get_edges()), *tcm.get_model())
+            
+            TCMtoDB.process_final_queries(session)
             #session.run(final_query)
-        creation_match_counter = 0
+        #driver.execute_query(final_query)
 
     @staticmethod
-    def process_option_value_to_neo4j(session, mother_specification_element, current_node, tcm_nodes, tcm_edges, creation_queries):
+    def process_option_value_to_neo4j(session, mother_specification_element, current_node, tcm_nodes, tcm_edges):
         if not TCMtoDB.is_result_empty(TCMtoDB.query_node(session, "ValueNode", {"identifier": current_node.get_identifier()})): return
-        print(current_node)
-        TCMtoDB.queries_append(creation_queries, TCMtoDB.v_node_creation_query(*current_node.get_v_node_creation_info()))    
+        print(f"Node to add to the graph : {current_node}")
+        TCMtoDB.v_node_creation_query(*current_node.get_v_node_creation_info())  
         db_msn_element, db_sn_element = None, None
-        tcm_mother_node = TCM.find_node_from_edge(tcm_edges, current_node, from_source = False)
         if TCMtoDB.is_possible_query(mother_specification_element):
             db_msn_element, db_sn_element = TCMtoDB.query_find_s_option(session, mother_specification_element, current_node)[0]
-            print(db_msn_element)
-            print(db_sn_element)
+            #print(f"mother specification node : {db_msn_element}")
+            #print(f"specification node : {db_sn_element}")
         
         if db_sn_element is not None:
             new_msn_element = db_sn_element.element_id
         else:
-            print(mother_specification_element is None)
-            if mother_specification_element is None: new_msn_element = TCMtoDB.process_root(session, current_node, creation_queries) #node is root
-            else:                                    new_msn_element = TCMtoDB.process_node(session, current_node, mother_specification_element, creation_queries)
+            #print(f"have to create s_node, is this root ? {mother_specification_element is None}")
+            if mother_specification_element is None: new_msn_element = TCMtoDB.process_root(session, current_node) #node is root
+            else:                                    new_msn_element = TCMtoDB.process_node(session, current_node, mother_specification_element)
         
-        TCMtoDB.queries_append(creation_queries, TCMtoDB.edge_creation_query({'identifier' : STARTING_CHAR + current_node.get_identifier()}, new_msn_element, "IS_SPECIFIED_BY"))           
+        TCMtoDB.edge_creation_query({'identifier' : STARTING_CHAR + current_node.get_identifier()}, new_msn_element, "IS_SPECIFIED_BY")
         
         current_node_children = TCM.find_children(current_node, tcm_edges)
-        print(current_node_children)
         for current_node_child in current_node_children:
-            TCMtoDB.process_option_value_to_neo4j(session, new_msn_element, current_node_child, tcm_nodes, tcm_edges, creation_queries)
-            TCMtoDB.queries_append(creation_queries, f"CREATE ({STARTING_CHAR}{current_node.get_identifier()})-[:CONTAINS]->(:ValueNode {{identifier: '{current_node_child.get_identifier()}'}})")
+            TCMtoDB.process_option_value_to_neo4j(session, new_msn_element, current_node_child, tcm_nodes, tcm_edges)
+            TCMtoDB.edge_creation_query({'identifier': STARTING_CHAR+current_node.get_identifier()}, [current_node_child.get_identifier()], "CONTAINS")
+
 
     @staticmethod
-    def process_root(session, current_node, queries):
+    def process_root(session, current_node):
         new_s_node_query = TCMtoDB.query_s_root(session)
         if not TCMtoDB.is_result_empty(new_s_node_query):
             for record in new_s_node_query:
                 return record[0].element_id #only 1 specification root #TODO, very annoying to get results from query
         else:
-            TCMtoDB.queries_append(queries, TCMtoDB.s_node_creation_query(current_node.get_identifier(), *current_node.get_s_node_creation_info()))
-            return {"identifier" : STARTING_CHAR + current_node.get_identifier()}
+            TCMtoDB.s_node_creation_query(current_node.get_identifier(), current_node.name(), current_node.get_stype())
+            return {"identifier" : current_node.get_identifier()}
 
     @staticmethod
-    def process_node(session, current_node, mother_specification_element, queries):
-        print("yow")
-        TCMtoDB.queries_append(queries, TCMtoDB.s_node_creation_query(current_node.get_identifier(), *current_node.get_s_node_creation_info()))
-        TCMtoDB.queries_append(queries, TCMtoDB.edge_creation_query(mother_specification_element, new_msn_element, "CONTAINS"))
-        return {"identifier" : STARTING_CHAR + current_node.get_identifier()}
+    def process_node(session, current_node, mother_specification_element):
+        TCMtoDB.s_node_creation_query(current_node.get_identifier(), current_node.name(), current_node.get_stype())
+        TCMtoDB.edge_creation_query(mother_specification_element, {"identifier" : current_node.get_identifier()}, "CONTAINS")
+        return {"identifier" : current_node.get_identifier()}
 
 
     #################### Util #######################
@@ -72,22 +71,14 @@ class TCMtoDB:
     @staticmethod
     def is_possible_query(db_identifier):
         return not(db_identifier is None or isinstance(db_identifier, dict))
-    
-    @staticmethod
-    def queries_append(queries, obj):
-        if isinstance(obj, str): queries[1].append(obj)
-        else:
-            queries[1].append(obj[0])
-            if obj[1]: queries[0].append(obj[1])
             
-
 
     ################## Queries to find data in db ###################
 
     @staticmethod
     def query_s_root(session):
         query = f"MATCH (root:SpecificationNode)\nWHERE NOT EXISTS((root)<-[:CONTAINS]-())\nRETURN root"
-        return session.run(query)
+        return session.run(query) #TODO
 
     @staticmethod
     def query_node(session, node_type, properties):
@@ -122,24 +113,82 @@ class TCMtoDB:
 
     @staticmethod
     def v_node_creation_query(identifier, value):
-        return f"CREATE ({STARTING_CHAR}{identifier}:ValueNode {{value: {sanitize(value)}, identifier: '{identifier}'}})"
+        TCMtoDB.final_queries["node_creation"].append(lambda _: (f"CREATE (:ValueNode {{value: {sanitize(value)}, identifier: '{identifier}'}})", None))
+        TCMtoDB.final_queries["node_matching"][identifier] = lambda counter: f"MATCH (e{counter}:ValueNode {{identifier: '{identifier}')}}"
 
     @staticmethod
     def s_node_creation_query(identifier, name, stype):
-        return f"CREATE ({STARTING_CHAR}{identifier}:SpecificationNode {{name: '{name}', type: '{stype}'}})"
+        TCMtoDB.final_queries["node_creation"].append(lambda counter: (f"CREATE (e{counter}:SpecificationNode {{name: '{name}', type: '{stype}'}})", identifier))
+        #TCMtoDB.final_queries["node_matching"][identifier] = lambda counter: f"MATCH (e{counter}) WHERE elementId(e{counter}) = " #will be completed on runtime
 
     @staticmethod
     def edge_creation_query(ms_element, cs_element, relation):
-        setup = ""
-        token = [None, None]
+        identifiers = [None, None]
         for i, e in enumerate([ms_element, cs_element]):
-            if not isinstance(e, dict):
-                setup += f"MATCH (e{TCMtoDB.creation_match_counter}) WHERE elementId(e{TCMtoDB.creation_match_counter}) = '{e}'"
-                token[i] = f"e{TCMtoDB.creation_match_counter}"
-                TCMtoDB.creation_match_counter += 1
-            else: token[i] = e['identifier']
+            if isinstance(e, str) and not (e in TCMtoDB.final_queries["node_matching"]):
+                TCMtoDB.final_queries["node_matching"][e] = lambda counter: f"MATCH (e{counter}) WHERE elementId(e{counter}) = '{e}'"
+                identifiers[i] = e
+            elif isinstance(e, dict) and not (e['identifier'] in TCMtoDB.final_queries["node_matching"]):
+                identifiers[i] = e['identifier']
+            elif isinstance(e, list) and not (e[0] in TCMtoDB.final_queries["node_matching"]):
+                TCMtoDB.final_queries["node_matching"][e[0]] = lambda counter: f"MATCH (e{counter}:ValueNode {{identifier: '{e[0]}'}})"
+                identifiers[i] = e[0]
+            
+        TCMtoDB.final_queries["edge_creation"].append((*identifiers, relation))
+    
+    @staticmethod
+    def process_final_queries(session):
+        TCMtoDB.process_node_creation_query(session)
+        TCMtoDB.process_edge_creation_queries(session)
+    
+    @staticmethod
+    def process_creation_query(session):
+        element_ids_to_return = []
+        query = ""
+        for function in TCMtoDB.final_queries["node_creation"]:
+            creation_query, identifier = function(TCMtoDB.token_counter)
+            query += creation_query+'\n'
+            if identifier is not None: element_ids_to_return.append((f"e{TCMtoDB.token_counter}", identifier))
+            TCMtoDB.token_counter += 1
+        if element_ids_to_return != []: query += "RETURN "+reduce(lambda x, y: x+', '+y, map(lambda e: e[0], element_ids_to_return)) 
+        records = session.run(query)#TODO
+        for record in records:
+            query_results = record
+            break
+
+        for i, node_element in enumerate(query_results):
+            node_identifier = element_ids_to_return[i][-1]
+            match_functions = TCMtoDB.final_queries["node_matching"]
+            match_functions[node_identifier] = lambda counter : f"MATCH (e{counter}) WHERE elementId(e{counter}) = '{node_element.element_id}'"
         
-        return f"CREATE ({token[0]})-[:{relation}]->({token[1]})", setup
+        TCMtoDB.token_counter = 0
+    
+    @staticmethod
+    def process_edge_creation_queries(session):
+        queries = []
+        seen_identifiers = []
+        edges_to_create = []
+        id_counter = 0
+        node_matching = TCMtoDB.final_queries["node_matching"]
+        for edge in TCMtoDB.final_queries["edge_creation"]:
+            edges_to_create.append(edge)
+            mother_id, child_id, relation = edge
+            for node_id in [mother_id, child_id]:
+                if node_id not in seen_identifiers:
+                    seen_identifiers.append(node_id)
+                    id_counter += 1
+            if id_counter >= TCMtoDB.MAX_MATCH_PER_QUERY - 1:
+                queries.append(TCMtoDB.edge_creation_queries(seen_identifiers, edges_to_create))
+                id_counter = 0
+                seen_identifiers = []
+                edges_to_create = []
+            
+
+    @staticmethod
+    def edge_creation_queries()
+            
+
+
 
 
 def main():
@@ -149,20 +198,21 @@ def main():
     for filename in os.listdir(json_path):
         if filename.endswith(".json"):
             counter += 1
-            if counter < 3: continue
+            if counter < 2: continue
             file_path = os.path.join(json_path, filename)
             print(file_path)
             test = TCM(file_path)
             processed_json.append(test)
             break
 
-    # URI examples: "neo4j://localhost", "neo4j+s://xxx.databases.neo4j.io"
     URI = "bolt://localhost:7687"
     AUTH = ("neo4j", "password")
     DB_NAME = AUTH[0]
 
     with GraphDatabase.driver(URI, auth=AUTH) as driver:
         driver.verify_connectivity()
+        
+        
 
         for tcm in processed_json:
             TCMtoDB.expand_neo4j_tsm(driver, DB_NAME, tcm)
