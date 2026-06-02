@@ -130,14 +130,12 @@ class TSM:
         new_v_node = TSM.create_v_node(*current_node.get_v_node_creation_info())
         self.add_value_node(new_v_node)
 
-        tsm_mother_v_node, tsm_mother_s_node, tsm_s_nodes, tsm_filtered_s_node, tsm_s_node = None, None, [], [], None
+        tsm_mother_v_node, tsm_mother_s_node, tsm_s_node= None, None, None
         tcm_mother_node = TCM.find_node_from_edge(tcm_edges, current_node, from_source = False)
         if tcm_mother_node   is not None: tsm_mother_v_node = TCM.find_node_from_hash(v_nodes, tcm_mother_node)
         if tsm_mother_v_node is not None: tsm_mother_s_node = self.spec(tsm_mother_v_node)
-        if tsm_mother_s_node is not None: tsm_s_nodes = TCM.find_children(tsm_mother_s_node, self.get_containment_specification_edges())
-        if tsm_s_nodes             != []: tsm_filtered_s_node = list(filter(lambda x: x.name() == current_node.name(), tsm_s_nodes))
-        if tsm_filtered_s_node     != []: tsm_s_node = tsm_filtered_s_node[0]
-
+        if tsm_mother_s_node is not None: tsm_s_node = TCM.find_node(self.get_containment_specification_edges(), lambda edge : edge.source() == tsm_mother_s_node and edge.target().name() == current_node.name(), lambda edge : edge.target())
+        
         if tsm_s_node is not None:
             #print(f"found specification for node {current_node} : {tsm_s_node}")
             self.process_type(current_node, tsm_s_node)
@@ -183,9 +181,7 @@ class TSM:
             v_nodetype = type(v_node.val())
             s_nodetype = s_node.stype()
             if v_nodetype != s_nodetype and v_nodetype in [int, float, bool]:
-                print(f"value node type : {v_nodetype} for value {v_node.val()}")
                 v_node.cast(s_nodetype)
-                print(f"value node casted to : {s_nodetype} for value {v_node.val()}")
 
 
 def main():
@@ -201,9 +197,6 @@ def main():
                 break
     
     test_tsm = TSM(processed_json)
-    for s in test_tsm.get_specification_nodes():
-        print(s)
-    return
 
 if __name__ == '__main__':
     main()
