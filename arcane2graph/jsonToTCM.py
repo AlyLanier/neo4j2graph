@@ -14,6 +14,7 @@ class Node:
         self.path = path
         self.signature = None
         self._type = _hidden_type
+        self.identifier = None
     
     def __repr__(self):
         return f"N({self.name()}, {self.val()}, {self._type})"
@@ -53,8 +54,11 @@ class Node:
     def hash_code(self):
         return hashlib.md5(repr((self.get_path(), self.get_signature())).encode()).hexdigest()
     
+    def set_identifier(self):
+        self.identifier = self.hash_code()
+
     def get_identifier(self):
-        return self.hash_code()
+        return self.identifier
 
 
 class Edge:
@@ -96,9 +100,11 @@ class TCM:
     def nodify(self, data):
         data = data['case']['mahyco']
         path = "mahyco"
-        nodes = [self.create_node("root", None, path)]
+        root = self.create_node("root", None, path)
+        nodes = [root]
         edges = []
-        self.nodify_rec(data, nodes[0], nodes, edges, path)
+        self.nodify_rec(data, root, nodes, edges, path)
+        root.set_identifier()
         return nodes, edges
 
     def nodify_rec(self, data, mother_node, nodes, edges, current_path):
@@ -123,7 +129,8 @@ class TCM:
         else:
             new_node = self.create_node(k, None, current_path)
             signature = self.nodify_rec(v, new_node, nodes, edges, current_path)
-        
+
+        new_node.set_identifier()
         nodes.append(new_node)
         edges.append(self.create_edge(mother_node, new_node))
         
