@@ -47,6 +47,7 @@ class TSM:
         self.v_nodes, self.s_nodes, self.c_edges, self.s_edges = v_nodes, s_nodes, c_edges, s_edges
         for test_case in test_case_models:
             self.expand_tsm(test_case)
+            self.unify_tsm(test_case)
     
     ################### getters & list appends ###################
 
@@ -137,7 +138,6 @@ class TSM:
         if tsm_mother_s_node is not None: tsm_s_node = TCM.find_node(self.get_containment_specification_edges(), lambda edge : edge.source() == tsm_mother_s_node and edge.target().name() == current_node.name(), lambda edge : edge.target())
         
         if tsm_s_node is not None:
-            #print(f"found specification for node {current_node} : {tsm_s_node}")
             self.process_type(current_node, tsm_s_node)
             self.add_specification_edge(new_v_node, tsm_s_node)
         else:
@@ -146,12 +146,8 @@ class TSM:
                 if new_s_node is None:
                     new_s_node = TSM.create_s_node(*current_node.get_s_node_creation_info())
                     self.add_specification_node(new_s_node)
-                    #print(f"did not find root, created node {new_s_node}")
-                #else: print("found root, no need to create it")
             else:
-                #print(tcm_mother_node, tsm_mother_v_node, tsm_mother_s_node, tsm_s_node)
                 new_s_node = TSM.create_s_node(*current_node.get_s_node_creation_info())
-                #print(f"did not find specification for node {current_node}, created node {new_s_node}")
                 self.add_specification_node(new_s_node)
                 self.add_containment_edge(tsm_mother_s_node, new_s_node)
 
@@ -164,15 +160,18 @@ class TSM:
             self.add_containment_edge(new_v_node, tsm_v_node_child)
     
     def process_type(self, current_node, tsm_s_node):
-        current_node_valtype = type(current_node.val())
+        current_node_valtype = current_node.get_type()
         tsm_s_nodetype = tsm_s_node.stype()
+        if tsm_s_nodetype == current_node_valtype: return
         
         #check types and print warning if not correct
-        if tsm_s_nodetype != current_node_valtype and current_node.val() is not None:
-            if tsm_s_nodetype == type(None) or (tsm_s_nodetype == bool and current_node_valtype in [int, float]) or (tsm_s_nodetype in [bool, int] and current_node_valtype == float):
-                tsm_s_node.set_stype(current_node_valtype)
-                self.update_value_nodes_types(tsm_s_node)
-            else: print(f"[WARNING] TCM node {current_node} has value type {current_node_valtype}, expected {tsm_s_nodetype}")
+        if tsm_s_nodetype == type(None) or (tsm_s_nodetype == bool and current_node_valtype in [int, float]) or (tsm_s_nodetype in [bool, int] and current_node_valtype == float):
+            tsm_s_node.set_stype(current_node_valtype)
+            #TODO pas le droit de changer la valeur des nodes car ça change toutes les signatures
+            #Il faut, à la fin de l'insersion du TCM dans le TSM, voir si les types sont bons et
+            #et modifier les valeurs, update tous les identifiants des values_nodes issues du tcm
+            # self.update_value_nodes_types(tsm_s_node)
+        else: print(f"[WARNING] TCM node {current_node} has value type {current_node_valtype}, expected {tsm_s_nodetype}")
     
     def update_value_nodes_types(self, s_node):
         if s_node.stype() == type(None): return
@@ -182,6 +181,9 @@ class TSM:
             s_nodetype = s_node.stype()
             if v_nodetype != s_nodetype and v_nodetype in [int, float, bool]:
                 v_node.cast(s_nodetype)
+    
+    def unify_tsm(self, tcm):
+        pass
 
 
 def main():

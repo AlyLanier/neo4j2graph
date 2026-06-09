@@ -41,7 +41,7 @@ def TSM_creation_query(tsm):
 
 
 def build_tsm():
-    max_process = 1
+    max_process = 2
     json_path = "arc_json"
     processed_json = []
     for filename in os.listdir(json_path):
