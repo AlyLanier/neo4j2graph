@@ -30,11 +30,12 @@ class TCMtoDB:
     def process_option_value_to_neo4j(session, mother_specification_element, current_node, tcm_nodes, tcm_edges):
         if not (isinstance(mother_specification_element, dict) or (current_node.get_identifier() not in TCMtoDB.db_existing_nodes)): return
         if current_node.get_identifier() in TCMtoDB.final_queries["node_matching"]: return
-        print(f"Node to add to the graph : {current_node}")
-        TCMtoDB.v_node_creation_query(*current_node.get_v_node_creation_info())  
-        db_msn_element, db_sn_element = None, None
+        print(f"Node to add to the graph : {current_node}") 
+        TCMtoDB.v_node_creation_query(*current_node.get_v_node_creation_info())
+
+        db_sn_element = None
         if TCMtoDB.is_possible_query(mother_specification_element):
-            db_msn_element, db_sn_element = TCMtoDB.query_find_s_option(session, mother_specification_element, current_node)
+            db_sn_element = TCMtoDB.query_find_s_option(session, mother_specification_element, current_node)
         
         if db_sn_element is not None:
             new_msn_element = db_sn_element.element_id
@@ -84,20 +85,45 @@ class TCMtoDB:
         query = query[:-2]
 
         query_results = list(session.run(query).single())
-        if query_results.all():
+        if all(query_results):
             raise Exception("TCM already is in db")
         return list(compress(identifiers, query_results))
 
     @staticmethod
     def is_result_empty(query_result):
         return query_result.peek() is None
-    
-
-    #################### Util #######################
 
     @staticmethod
     def is_possible_query(db_identifier):
         return not(db_identifier is None or isinstance(db_identifier, dict))
+    
+
+    ################## Processing node type ###########################
+    #TODO voir TCMtoTSM
+    def process_type(session, current_node, db_sn_element):
+        current_node_valtype = current_node.get_stype()
+        db_sn_type = db_sn_element.properties.type
+        if db_sn_type == current_node_valtype: return
+
+        if db_sn_type == 'NoneType' or (db_sn_type == 'bool' and current_node_valtype in ['int', 'float']) or (db_sn_type in ['bool', 'int'] and current_node_valtype == 'float'):
+            #update db snode type
+            type_update_query = f"MATCH (sn:SpecificationNode)<-[:IS_SPECIFIED_BY]-(vn:ValueNode) WHERE elementId(sn) = '{db_sn_element.element_id}'\nSET sn.type = '{current_node_valtype}'"
+            if db_sn_type == 'bool' and current_node_valtype == 'float':
+                type_update_query += "\nSET vn.value = toFloat(toInteger(vn.value))"
+            elif db_sn_type != 'NoneType':
+                if current_node_valtype == 'int':
+                    type_update_query += "\nSET vn.value = toInteger(vn.value)"
+                elif current_node_valtype == 'float':
+                    type_update_query += "\nSET vn.value = toFloat(vn.value)"
+            
+            if db_sn_element.element_id in TCMtoDB.final_queries["type_update"]:
+                session.run(TCMtoDB.final_queries["type_update"][db_sn_element.element_id])
+            TCMtoDB.final_queries["type_update"][db_sn_element.element_id] = type_update_query
+
+        elif (current_node_valtype == 'bool' and db_sn_type in ['int', 'float']) or (current_node_valtype in ['bool', 'int'] and db_sn_type == 'float'):
+            return int if db_sn_type == 'int' else float
+            
+        else: print(f"[WARNING] TCM node {current_node} has value type {current_node_valtype}, expected {db_sn_type}")
             
 
     ################## Queries to find data in db ###################
@@ -108,24 +134,13 @@ class TCMtoDB:
         return session.run(query)
 
     @staticmethod
-    def query_node(session, node_type, properties):
-        query = f"MATCH (NT:{node_type}"
-        if properties:
-            query += " {"
-            for k, v in properties.items():
-                query += f"{k}: '{v}',"
-            query = query[:-1]+"}"
-        query += ")\nRETURN NT"
-        return session.run(query)
-
-    @staticmethod
     def query_find_s_option(session, mother_specification_element, current_node):
         query = f"""MATCH (SNM:SpecificationNode)
                     WHERE elementId(SNM) = '{mother_specification_element}'
                     OPTIONAL MATCH (SN:SpecificationNode {{name: '{current_node.name()}'}})<-[:CONTAINS]-(SNM)
-                    RETURN SNM, SN
+                    RETURN SN
                     """
-        return session.run(query).single()
+        return session.run(query).single()[0]
 
 
     ############### queries to create objects in db ################
@@ -229,6 +244,7 @@ class TCMtoDB:
 
 
 def main():
+    return
     json_path = "arc_json"
     processed_json = []
     counter = 0
@@ -256,7 +272,7 @@ def main():
 
 
     query = f"""MATCH (SNM:SpecificationNode)<-[:IS_SPECIFIED_BY]-(:ValueNode {{identifier: "a1566f82ecbad4341fdb52a472e4c5b1"}})
-            OPTIONAL MATCH (SN:SpecificationNode {{name: "nme"}})<-[:CONTAINS]-(SNM)
+            OPTIONAL MATCH (SN:SpecificationNode {{name: "name"}})<-[:CONTAINS]-(SNM)
             RETURN SNM, SN
             """
     test = driver.execute_query(query)
