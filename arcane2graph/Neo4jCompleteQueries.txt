@@ -1,0 +1,49 @@
+MATCH (leaf:ValueNode) WHERE NOT (leaf)-[:CONTAINS]->() AND (leaf.identifier IN ["5c9573292a0784c352a1c1d1cfac4242", "451c9c90e9fb8dde88ebc62a989144a8"] OR elementId(leaf) IN ["4:ff0859ac-496c-403c-b1cb-8a0bb1eafbc9:236", "4:ff0859ac-496c-403c-b1cb-8a0bb1eafbc9:276", "4:ff0859ac-496c-403c-b1cb-8a0bb1eafbc9:285", "4:ff0859ac-496c-403c-b1cb-8a0bb1eafbc9:232", "4:ff0859ac-496c-403c-b1cb-8a0bb1eafbc9:229", "4:ff0859ac-496c-403c-b1cb-8a0bb1eafbc9:270", "4:ff0859ac-496c-403c-b1cb-8a0bb1eafbc9:245"])
+MATCH p = (root:ValueNode)-[:CONTAINS*]->(leaf)
+RETURN p
+
+
+Comb cov
+
+MATCH (root:ValueNode) WHERE NOT (root)<--()
+MATCH (root)-[:CONTAINS*]->(vn:ValueNode) WHERE NOT (vn)-[:CONTAINS]->() AND (vn.identifier IN ["5c9573292a0784c352a1c1d1cfac4242", "451c9c90e9fb8dde88ebc62a989144a8"] OR elementId(vn) IN ["4:ff0859ac-496c-403c-b1cb-8a0bb1eafbc9:236", "4:ff0859ac-496c-403c-b1cb-8a0bb1eafbc9:276", "4:ff0859ac-496c-403c-b1cb-8a0bb1eafbc9:285", "4:ff0859ac-496c-403c-b1cb-8a0bb1eafbc9:232", "4:ff0859ac-496c-403c-b1cb-8a0bb1eafbc9:229", "4:ff0859ac-496c-403c-b1cb-8a0bb1eafbc9:270", "4:ff0859ac-496c-403c-b1cb-8a0bb1eafbc9:245"])
+WITH collect(vn) AS root_coverage, elementId(root) AS _
+UNWIND apoc.coll.combinations(root_coverage, 2) as node_couple
+WITH node_couple, count(node_couple) AS weight
+CALL apoc.coll.elements(node_couple) YIELD _1n, _2n
+CALL apoc.create.vRelationship(_1n, 'COMBINED', {weight: weight}, _2n) YIELD rel
+RETURN _1n, rel, _2n, weight
+ORDER BY weight DESC
+
+
+Comb cov list
+
+MATCH (root:ValueNode) WHERE NOT (root)<--()
+MATCH (root)-[:CONTAINS*]->(vn:ValueNode)
+WHERE NOT (vn)-[:CONTAINS]->() AND (vn.identifier IN ["5c9573292a0784c352a1c1d1cfac4242", "451c9c90e9fb8dde88ebc62a989144a8"] OR elementId(vn) IN ["4:ff0859ac-496c-403c-b1cb-8a0bb1eafbc9:236", "4:ff0859ac-496c-403c-b1cb-8a0bb1eafbc9:276", "4:ff0859ac-496c-403c-b1cb-8a0bb1eafbc9:285", "4:ff0859ac-496c-403c-b1cb-8a0bb1eafbc9:232", "4:ff0859ac-496c-403c-b1cb-8a0bb1eafbc9:229", "4:ff0859ac-496c-403c-b1cb-8a0bb1eafbc9:270", "4:ff0859ac-496c-403c-b1cb-8a0bb1eafbc9:245"])
+WITH apoc.coll.sortNodes(collect(vn), 'value') AS coverage, elementId(root) AS rid
+RETURN coverage
+
+
+Opt cov
+
+MATCH (sn:SpecificationNode) WHERE elementId(sn) = '4:ff0859ac-496c-403c-b1cb-8a0bb1eafbc9:300'
+OPTIONAL MATCH (sn)-[:CONTAINS*]->(n:SpecificationNode)<-[:IS_SPECIFIED_BY]-(vn:ValueNode) WHERE (sn.type IN ['list', 'dict']) AND NOT (n.type IN ['list', 'dict'])
+OPTIONAL MATCH (sn)<-[:IS_SPECIFIED_BY]-(v2n:ValueNode) WHERE NOT (sn.type IN ['list', 'dict'])
+return
+CASE vn
+  WHEN IS NULL THEN v2n
+  ELSE vn
+END AS result
+
+
+Opt cov pretty
+
+MATCH (sn:SpecificationNode) WHERE elementId(sn) = '4:ff0859ac-496c-403c-b1cb-8a0bb1eafbc9:300'
+OPTIONAL MATCH p=(sn)-[:CONTAINS*]->(n:SpecificationNode)<-[:IS_SPECIFIED_BY]-(:ValueNode) WHERE (sn.type IN ['list', 'dict']) AND NOT (n.type IN ['list', 'dict'])
+OPTIONAL MATCH t=(sn)<-[:IS_SPECIFIED_BY]-(:ValueNode) WHERE NOT (sn.type IN ['list', 'dict'])
+return
+CASE p
+  WHEN IS NULL THEN t
+  ELSE p
+END AS result

@@ -9,9 +9,9 @@ class GraphFunctions:
     def option_coverage(session, s_node_identifying_component):
         node_query = GraphFunctions.node_from_identification_query(s_node_identifying_component)
         final_query = node_query+'\n'+"""OPTIONAL MATCH (sn)-[:CONTAINS*]->(n:SpecificationNode)<-[:IS_SPECIFIED_BY]-(vn:ValueNode) 
-WHERE (sn.type = 'list' OR sn.type = 'dict') AND (n.type <> 'list' AND n.type <> 'dict')
+WHERE (sn.type IN ['list', 'dict']) AND NOT (n.type IN ['list', 'dict'])
 OPTIONAL MATCH (sn)<-[:IS_SPECIFIED_BY]-(v2n:ValueNode)
-WHERE (sn.type <> 'list' AND sn.type <> 'dict')
+WHERE NOT (sn.type IN ['list', 'dict'])
 return
 CASE vn
     WHEN IS NULL THEN v2n
@@ -42,14 +42,10 @@ END AS result"""
     def combinatorial_coverage(session, leaf_nodes_to_consider = "ALL"):
         if leaf_nodes_to_consider == "ALL": return GraphFunctions.i_want_to_fry_my_pc(session)
         
-        where_condition_specification = ""
-        for node_id in leaf_nodes_to_consider:
-            match type(node_id).__name__:
-                case 'str':
-                    where_condition_specification += f" OR elementId(vn) = '{node_id}'"
-                case 'dict':
-                    where_condition_specification += f" OR vn.identifier = '{node_id['identifier']}'"
-        additional_conditions = f" AND ({where_condition_specification[4:]})"
+        match_on_properties = str([node['identifier'] for node in leaf_nodes_to_consider if isinstance(node, dict)])
+        match_on_element_id = str([node for node in leaf_nodes_to_consider if isinstance(node, str)])
+        
+        additional_conditions = f" AND (vn.identifier IN {match_on_properties} OR elementId(vn) IN {match_on_element_id})"
         query = GraphFunctions.combinatorial_coverage_base_query(additional_conditions)
         
         return session.run(query)
@@ -80,12 +76,22 @@ def main():
     AUTH = ("neo4j", "password")
     DB_NAME = AUTH[0]
 
+    nodes_to_consider = [{"identifier" : "5c9573292a0784c352a1c1d1cfac4242"},
+                        {"identifier" : "451c9c90e9fb8dde88ebc62a989144a8"},
+                        "4:ff0859ac-496c-403c-b1cb-8a0bb1eafbc9:236",
+                        "4:ff0859ac-496c-403c-b1cb-8a0bb1eafbc9:276", 
+                        "4:ff0859ac-496c-403c-b1cb-8a0bb1eafbc9:285", 
+                        "4:ff0859ac-496c-403c-b1cb-8a0bb1eafbc9:232", 
+                        "4:ff0859ac-496c-403c-b1cb-8a0bb1eafbc9:229", 
+                        "4:ff0859ac-496c-403c-b1cb-8a0bb1eafbc9:270", 
+                        "4:ff0859ac-496c-403c-b1cb-8a0bb1eafbc9:245"]
+
     with GraphDatabase.driver(URI, auth=AUTH) as driver:
         driver.verify_connectivity()
 
         with driver.session(database = DB_NAME) as session:
             #oc = GraphFunctions.option_coverage(session, '4:ff0859ac-496c-403c-b1cb-8a0bb1eafbc9:1535')
-            cc = GraphFunctions.combinatorial_coverage(session)
+            cc = GraphFunctions.combinatorial_coverage(session, nodes_to_consider)
 
 if __name__ == '__main__':
     main()
