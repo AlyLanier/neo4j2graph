@@ -44,12 +44,11 @@ def build_tsm(files):
     max_process = 2
     json_path = "arc_json"
     processed_json = []
-    for filename in os.listdir(json_path):
-        if filename in files:
-            file_path = os.path.join(json_path, filename)
-            print(file_path)
-            test = TCM(file_path)
-            processed_json.append(test)
+    for filename in files:
+        file_path = os.path.join(json_path, filename)
+        print(file_path)
+        test = TCM(file_path)
+        processed_json.append(test)
     
     return TSM(processed_json)
 
