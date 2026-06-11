@@ -41,7 +41,6 @@ def TSM_creation_query(tsm):
 
 
 def build_tsm(files):
-    max_process = 2
     json_path = "arc_json"
     processed_json = []
     for filename in files:
@@ -55,6 +54,8 @@ def build_tsm(files):
 def main():
     
     test_tsm = build_tsm(['Mahyco_0x5b67d7517e00.json', 'Mahyco_0x5be0ee5cb7b0.json'])
+    #test_tsm = build_tsm(['Mahyco_0x5be0ee5cb7b0.json'])
+    #test_tsm = build_tsm(['Mahyco_0x5b67d7517e00.json'])
     string_for_neo4j = TSM_creation_query(test_tsm)
     
 

@@ -244,7 +244,6 @@ class TCMtoDB:
 
 
 def main():
-    return
     json_path = "arc_json"
     processed_json = []
     counter = 0
