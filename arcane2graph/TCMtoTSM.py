@@ -1,5 +1,5 @@
 import os
-from jsonToTCM import TCM, Edge, NODE_COMPOSITE_TYPES
+from jsonToTCM import TCM, Edge, TYPES
 
 class SNode:
     def __init__(self, name, stype):
@@ -39,7 +39,8 @@ class VNode:
         return self.v
     
     def cast(self, typ):
-        self.v = typ(self.v)
+        if self.val() is None: return
+        self.v = typ(self.val())
 
 class TSM:
 
@@ -47,7 +48,6 @@ class TSM:
         self.v_nodes, self.s_nodes, self.c_edges, self.s_edges = v_nodes, s_nodes, c_edges, s_edges
         for test_case in test_case_models:
             self.expand_tsm(test_case)
-            self.unify_tsm(test_case)
     
     ################### getters & list appends ###################
 
@@ -138,7 +138,7 @@ class TSM:
         if tsm_mother_s_node is not None: tsm_s_node = TCM.find_node(self.get_containment_specification_edges(), lambda edge : edge.source() == tsm_mother_s_node and edge.target().name() == current_node.name(), lambda edge : edge.target())
         
         if tsm_s_node is not None:
-            self.process_type(current_node, tsm_s_node)
+            self.process_type(new_v_node, tsm_s_node)
             self.add_specification_edge(new_v_node, tsm_s_node)
         else:
             if TCM.is_root(current_node, tcm_edges):
@@ -159,31 +159,28 @@ class TSM:
             tsm_v_node_child = TCM.find_node_from_hash(v_nodes, current_node_child)
             self.add_containment_edge(new_v_node, tsm_v_node_child)
     
-    def process_type(self, current_node, tsm_s_node):
-        current_node_valtype = current_node.get_type()
+    def process_type(self, tsm_v_node, tsm_s_node):
+        tsm_new_v_type = type(tsm_v_node.val())
         tsm_s_nodetype = tsm_s_node.stype()
-        if tsm_s_nodetype == current_node_valtype: return
+        if tsm_s_nodetype == tsm_new_v_type: return
         
         #check types and print warning if not correct
-        if tsm_s_nodetype == type(None) or (tsm_s_nodetype == bool and current_node_valtype in [int, float]) or (tsm_s_nodetype in [bool, int] and current_node_valtype == float):
-            tsm_s_node.set_stype(current_node_valtype)
-            #TODO pas le droit de changer la valeur des nodes car ça change toutes les signatures
-            #Il faut, à la fin de l'insersion du TCM dans le TSM, voir si les types sont bons et
-            #et modifier les valeurs, update tous les identifiants des values_nodes issues du tcm
-            # self.update_value_nodes_types(tsm_s_node)
-        else: print(f"[WARNING] TCM node {current_node} has value type {current_node_valtype}, expected {tsm_s_nodetype}")
+        if TYPES[tsm_s_nodetype] < TYPES[tsm_new_v_type]:
+            tsm_s_node.set_stype(tsm_new_v_type)
+            self.update_value_nodes_types(tsm_s_node)
+        else:
+            tsm_v_node.cast(tsm_s_nodetype)
+        
     
     def update_value_nodes_types(self, s_node):
-        if s_node.stype() == type(None): return
+        # never used on s_node with type NoneType
         v_nodes = TCM.find_parents(s_node, self.get_specification_edges())
         for v_node in v_nodes:
-            v_nodetype = type(v_node.val())
+            if v_node.val() is None: continue
             s_nodetype = s_node.stype()
-            if v_nodetype != s_nodetype and v_nodetype in [int, float, bool]:
+            if type(v_node.val()) != s_nodetype:
                 v_node.cast(s_nodetype)
     
-    def unify_tsm(self, tcm):
-        pass
 
 
 def main():

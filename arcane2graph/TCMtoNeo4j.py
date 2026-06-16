@@ -1,10 +1,10 @@
-from jsonToTCM import TCM
-from TCMtoTSM import TSM
+from jsonToTCM import TCM, Node, TYPES
 from TSMtoNeo4j import sanitize
 from neo4j import GraphDatabase
 import os
 from functools import reduce
 from itertools import compress
+from pydoc import locate
 
 #TODO ajouter les check de type du tsm
 
@@ -17,13 +17,13 @@ class TCMtoDB:
     ################## Expanding db with a tcm ######################
     @staticmethod
     def expand_neo4j_tsm(driver, db, tcm):
+        unified_tcm = tcm.unify_types()
         TCMtoDB.final_queries = {"node_creation" : [], "node_matching" : {}, "edge_creation" : []}
         TCMtoDB.path_of_s_nodes_to_create = []
         TCMtoDB.db_existing_nodes = []
         with driver.session(database = db) as session:
-            TCMtoDB.db_existing_nodes = TCMtoDB.already_existing_nodes(session, tcm)
-
-            TCMtoDB.process_option_value_to_neo4j(session, None, tcm.search_root(tcm.get_edges()), *tcm.get_model())
+            TCMtoDB.db_existing_nodes = TCMtoDB.already_existing_nodes(session, unified_tcm)
+            TCMtoDB.process_option_value_to_neo4j(session, None, unified_tcm.search_root(unified_tcm.get_edges()), *unified_tcm.get_model())
             TCMtoDB.process_final_queries(session)
 
     @staticmethod
@@ -31,7 +31,6 @@ class TCMtoDB:
         if not (isinstance(mother_specification_element, dict) or (current_node.get_identifier() not in TCMtoDB.db_existing_nodes)): return
         if current_node.get_identifier() in TCMtoDB.final_queries["node_matching"]: return
         print(f"Node to add to the graph : {current_node}") 
-        TCMtoDB.v_node_creation_query(*current_node.get_v_node_creation_info())
 
         db_sn_element = None
         if TCMtoDB.is_possible_query(mother_specification_element):
@@ -43,6 +42,7 @@ class TCMtoDB:
             if mother_specification_element is None: new_msn_element = TCMtoDB.process_root(session, current_node) #node is root
             else:                                    new_msn_element = TCMtoDB.process_node(session, current_node, mother_specification_element)
         
+        TCMtoDB.v_node_creation_query(*current_node.get_v_node_creation_info())
         TCMtoDB.edge_creation_query({'identifier' : current_node.get_identifier()}, new_msn_element, "IS_SPECIFIED_BY")
         
         current_node_children = TCM.find_children(current_node, tcm_edges)
@@ -99,31 +99,46 @@ class TCMtoDB:
     
 
     ################## Processing node type ###########################
-    #TODO voir TCMtoTSM
-    def process_type(session, current_node, db_sn_element):
-        current_node_valtype = current_node.get_stype()
-        db_sn_type = db_sn_element.properties.type
+    #TODO not put into main function, must be tested
+    @staticmethod
+    def process_type_db(current_node, db_sn_element):
+        current_node_valtype = locate(current_node.get_stype())
+        db_sn_type = locate(db_sn_element.properties.type)
+        if db_sn_element.element_id in TCMtoDB.final_queries["type_change"] and TYPES[TCMtoDB.final_queries["type_change"][db_sn_element.element_id]] > TYPES[db_sn_type]:
+            db_sn_type = TCMtoDB.final_queries["type_change"][db_sn_element.element_id]
         if db_sn_type == current_node_valtype: return
 
-        if db_sn_type == 'NoneType' or (db_sn_type == 'bool' and current_node_valtype in ['int', 'float']) or (db_sn_type in ['bool', 'int'] and current_node_valtype == 'float'):
-            #update db snode type
-            type_update_query = f"MATCH (sn:SpecificationNode)<-[:IS_SPECIFIED_BY]-(vn:ValueNode) WHERE elementId(sn) = '{db_sn_element.element_id}'\nSET sn.type = '{current_node_valtype}'"
-            if db_sn_type == 'bool' and current_node_valtype == 'float':
-                type_update_query += "\nSET vn.value = toFloat(toInteger(vn.value))"
-            elif db_sn_type != 'NoneType':
-                if current_node_valtype == 'int':
-                    type_update_query += "\nSET vn.value = toInteger(vn.value)"
-                elif current_node_valtype == 'float':
-                    type_update_query += "\nSET vn.value = toFloat(vn.value)"
-            
-            if db_sn_element.element_id in TCMtoDB.final_queries["type_update"]:
-                session.run(TCMtoDB.final_queries["type_update"][db_sn_element.element_id])
-            TCMtoDB.final_queries["type_update"][db_sn_element.element_id] = type_update_query
+        if TYPES[db_sn_type] < TYPES[current_node_valtype]:
+            TCMtoDB.final_queries["type_change"][db_sn_element.element_id] = TCMtoDB.update_tsm_types(db_sn_element, current_node, db_sn_type, current_node_valtype)
+        else:
+            current_node.cast(db_sn_type)
+        
+    
+    @staticmethod
+    def update_tsm_types(db_sn_element, current_node, db_sn_type, current_node_valtype):
+        update_sn_query = f"""MATCH (sn:SpecificationNode) WHERE elementId(sn) = '{db_sn_element.element_id}'
+SET sn.type = '{current_node.get_stype()}'"""
+        cast_method = "n.value"
+        if db_sn_type == bool:
+            cast_method = TCMtoDB.Neo4j_type_cast(cast_method, int)
+        if current_node_valtype == float:
+            cast_method = TCMtoDB.Neo4j_type_cast(cast_method, float)
+        elif current_node_valtype == str:
+            cast_method = TCMtoDB.Neo4j_type_cast(cast_method, str)
 
-        elif (current_node_valtype == 'bool' and db_sn_type in ['int', 'float']) or (current_node_valtype in ['bool', 'int'] and db_sn_type == 'float'):
-            return int if db_sn_type == 'int' else float
-            
-        else: print(f"[WARNING] TCM node {current_node} has value type {current_node_valtype}, expected {db_sn_type}")
+        update_vn_query = f"""MATCH (vn:ValueNode) WHERE (sn)<-[:IS_SPECIFIED_BY]-(vn)
+FOREACH(n IN collect(vn) | SET n.value = {cast_method})"""
+        return update_sn_query + update_vn_query
+        
+    @staticmethod
+    def Neo4j_type_cast(obj, cast_into):
+        if cast_into == int:
+            return f"toInteger({obj})"
+        elif cast_into == float:
+            return f"toFloat({obj})"
+        elif cast_into == str:
+            return f"'{obj}'"
+    
             
 
     ################## Queries to find data in db ###################
