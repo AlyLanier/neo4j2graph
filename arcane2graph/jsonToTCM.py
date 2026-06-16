@@ -1,10 +1,17 @@
 import os
 import json
 import hashlib
+from numpy import format_float_scientific
 
 NODE_SIMPLE_TYPES = (str, int, float, bool, type(None))
-NODE_COMPOSITE_TYPES = (dict, list)
-NODE_TYPES = (*NODE_SIMPLE_TYPES, *NODE_COMPOSITE_TYPES)
+NODE_COMPOSITE_TYPES = (list, dict)
+TYPES = {
+    type(None) : 0,
+    bool : 1,
+    int : 2,
+    float : 3,
+    str : 4
+}
 
 class Node:
 
@@ -25,6 +32,13 @@ class Node:
     def val(self):
         return self.v
     
+    def set_val(self, value):
+        self.v = value
+    
+    def cast(self, typ):
+        if self.val() is None: return
+        self.set_val(typ(self.val()))
+    
     def get_path(self):
         return self.path
     
@@ -33,6 +47,7 @@ class Node:
     
     def set_signature(self, sig):
         self.signature = sig
+        self.set_identifier()
     
     def get_type(self):
         return (type(self.val()) if self._type is None else self._type)
@@ -104,7 +119,6 @@ class TCM:
         nodes = [root]
         edges = []
         self.nodify_rec(data, root, nodes, edges, path)
-        root.set_identifier()
         return nodes, edges
 
     def nodify_rec(self, data, mother_node, nodes, edges, current_path):
@@ -124,13 +138,12 @@ class TCM:
         if isinstance(v, NODE_SIMPLE_TYPES):
             casted_value = TCM.value_cast(v)
             new_node = self.create_node(k, casted_value, current_path)
-            signature = (k, ("scalar", casted_value))
+            signature = (k, ("scalar", TCM.cast_for_signature(casted_value)))
             new_node.set_signature(signature[1])
         else:
             new_node = self.create_node(k, None, current_path)
             signature = self.nodify_rec(v, new_node, nodes, edges, current_path)
 
-        new_node.set_identifier()
         nodes.append(new_node)
         edges.append(self.create_edge(mother_node, new_node))
         
@@ -160,6 +173,12 @@ class TCM:
             try: return float(obj)
             except: pass
         return obj
+    
+    @staticmethod
+    def cast_for_signature(obj):
+        if obj is None:                           return "None"
+        elif isinstance(obj, (bool, int, float)): return format_float_scientific(obj)
+        else:                                     return obj
         
     
     ###################### getters & node-edge creators ####################
@@ -261,8 +280,32 @@ class TCM:
     def search_root_rec(edge_list, current_node):
         for edge in edge_list:
             if edge.target() == current_node:
-                return self.search_root_rec(edge.source(), edges)
+                return TCM.search_root_rec(edge_list, edge.source())
         return current_node
+    
+
+    ################# Unify TCM types #########################
+
+    def unify_types(self):
+        paths = {}
+        for node in self.get_nodes():
+            if node.get_path() in paths:
+                paths[node.get_path()].append[node]
+            else:
+                paths[node.get_path()] = [node]
+        
+        for nodes in paths.values():
+            types = set(map(lambda n : n.get_type(), nodes))
+            if len(types) != 1:
+                if dict in types or list in types: raise Exception(f"Invalid types for nodes {nodes}, all of them must be the same type, either 'dict' or 'list'")
+                best_type = type(None)
+                for node in nodes:
+                    if TYPES[best_type] < TYPES[node.get_type()]: best_type = node.get_type()
+                
+                for node in nodes:
+                    node.cast(best_type)
+
+
 
         
 
