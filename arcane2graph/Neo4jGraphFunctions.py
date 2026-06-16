@@ -1,7 +1,9 @@
 from TSMtoNeo4j import sanitize
 from neo4j import GraphDatabase
+from MeanFunctions import *
 
 class GraphFunctions:
+
     @staticmethod
     def stringify_ids(list_node_ids):
         return str([node['identifier'] for node in list_node_ids if isinstance(node, dict)]), str([node for node in list_node_ids if isinstance(node, str)])
@@ -63,13 +65,25 @@ END AS result"""
         else:                            leaf_matching = "MATCH (vn:ValueNode) WHERE (root)-[:CONTAINS*]->(vn) AND NOT (vn)-[:CONTAINS]->()"
         return f"""MATCH (root:ValueNode) WHERE NOT (root)<--()
 {leaf_matching}{additional_conditions}
-WITH apoc.coll.sortNodes(collect(vn), 'value') AS coverage
+WITH collect(vn) AS coverage, root AS _
 UNWIND apoc.coll.combinations(coverage, 2) as node_couple
 WITH node_couple, count(node_couple) AS weight
 CALL apoc.coll.elements(node_couple) YIELD _1n, _2n
 CALL apoc.create.vRelationship(_1n, 'COMBINED', {{weight: weight}}, _2n) YIELD rel
-RETURN _1n, rel, _2n
-ORDER BY _1n.value, _2n.value"""
+RETURN _1n, rel, _2n"""
+    
+    @staticmethod
+    def combinatorial_coverage_from_slicing_query(additional_conditions, with_auto_reference_on_lists):
+        if with_auto_reference_on_lists: leaf_matching = "MATCH (root)-[:CONTAINS*]->(vn:ValueNode) WHERE NOT (vn)-[:CONTAINS]->()"
+        else:                            leaf_matching = "MATCH (vn:ValueNode) WHERE (root)-[:CONTAINS*]->(vn) AND NOT (vn)-[:CONTAINS]->()"
+        return f"""{leaf_matching}{additional_conditions}
+WITH collect(vn) AS coverage, root AS _
+UNWIND apoc.coll.combinations(coverage, 2) as node_couple
+WITH node_couple, count(node_couple) AS weight
+CALL apoc.coll.elements(node_couple) YIELD _1n, _2n
+CALL apoc.create.vRelationship(_1n, 'COMBINED', {{weight: weight}}, _2n) YIELD rel
+RETURN _1n, rel, _2n"""
+
     
 
     ################ TSM Slicing ##############################
@@ -86,9 +100,9 @@ WITH leafEID, leafPID, size(leafEID) + size(leafPID) AS len
 
 MATCH (root:ValueNode){root_condition}
 MATCH (root)-[:CONTAINS*]->(leaf:ValueNode) WHERE NOT (leaf)-[:CONTAINS]->() AND (leaf.identifier IN leafPID OR elementId(leaf) IN leafEID)
-WITH collect(DISTINCT leaf) AS leaves, root, len
+WITH size(collect(DISTINCT leaf)) AS sizes, root, len
 
-MATCH p = (root)-[*]->(n) WHERE size(leaves) = len AND EXISTS{{ MATCH t = (root)-[*]->(m) WHERE t <> p and m = n }}
+MATCH p = (root)-[*]->(n) WHERE sizes = len AND (EXISTS{{ MATCH t = (root)-[*]->(n) WHERE t <> p }})
 WITH p, root, nodes(p) AS Nodes, relationships(p) AS Relations
 
 MATCH (o:ValueNode) WHERE o in Nodes
@@ -98,6 +112,67 @@ MATCH ps = ()-[s:IS_SPECIFIED_BY]->() WHERE s IN Relations
 WITH collect(DISTINCT o) AS Vv, collect(DISTINCT q) AS Vs, collect(DISTINCT pr) AS Ec, collect(DISTINCT ps) AS Es, root
 RETURN Vv, Vs, Ec, Es"""
     
+    @staticmethod
+    def TSM_Slicing_for_cc_query(str_leaf_element_ids, str_leaf_property_ids, return_all_subgraphs):
+        root_condition = "" if return_all_subgraphs else " WHERE NOT (root) <-- ()"
+        return f"""WITH [{str_leaf_element_ids[1:-1]}] AS leafEID, [{str_leaf_property_ids[1:-1]}] AS leafPID
+WITH leafEID, leafPID, size(leafEID) + size(leafPID) AS len
+
+MATCH (root:ValueNode){root_condition}
+MATCH (root)-[:CONTAINS*]->(leaf:ValueNode) WHERE NOT (leaf)-[:CONTAINS]->() AND (leaf.identifier IN leafPID OR elementId(leaf) IN leafEID)
+WITH size(collect(DISTINCT leaf)) AS sizes, root, len
+
+MATCH p = (root)-[*]->(n) WHERE sizes = len AND (EXISTS{{ MATCH t = (root)-[*]->(n) WHERE t <> p }})
+WITH root"""
+    
+
+    ################ Slicing --> Combinatorial Coverage ###########
+
+    @staticmethod
+    def TSM_Slicing_and_Combinatorial_Coverage(session, nodes_on_slice, nodes_for_combinatorial_coverage, return_all_subgraphs = False, with_self_reference = False):
+        match_on_properties, match_on_element_id = GraphFunctions.stringify_ids(nodes_for_combinatorial_coverage)
+        if nodes_for_combinatorial_coverage == "ALL": additional_conditions = ""
+        else:                                         additional_conditions = f" AND (vn.identifier IN {match_on_properties} OR elementId(vn) IN {match_on_element_id})"
+        
+        
+        Slicing_part = *GraphFunctions.stringify_ids(nodes_on_slice), return_all_subgraphs
+        CC_part = additional_conditions, with_self_reference
+        query = GraphFunctions.TSM_Slicing_for_cc_query(*Slicing_part) + '\n' + GraphFunctions.combinatorial_coverage_from_slicing_query(*CC_part)
+        return session.run(query)
+
+    
+        
+    
+    ################## Node prevalence update ##############
+
+    @staticmethod
+    def prevalence(session, set_in_db = False):
+        id_prevalence = {}
+        db_data = GraphFunctions.get_nodes_for_prevalence(session)
+        harmonic_mean = power_mean(-1)
+        for result in db_data:
+            node_element, associated_leaves = result
+            leaves_prevalence = list(map(lambda n: n.properties.prevalence, associated_leaves))
+            id_prevalence[node_element.properties.identifier] = harmonic_mean(leaves_prevalence)
+        
+        if set_in_db: GraphFunctions.db_set_prevalence(session, id_prevalence)
+        return id_prevalence
+
+    @staticmethod
+    def get_nodes_for_prevalence(session):
+        query = """MATCH (node:ValueNode) WHERE (node)-[:CONTAINS]->()
+MATCH (leaf:ValueNode) WHERE NOT (leaf)-[:CONTAINS]->() AND (node)-[:CONTAINS*]->(leaf)
+RETURN node, collect(leaf)"""
+        return session.run(query)
+    
+    @staticmethod
+    def db_set_prevalence(session, id_prevalence):
+        setting_query = ""
+        counter = 0
+        for k, v in id_prevalence.items():
+            setting_query += f"MATCH (n{counter} {{identifier: '{k}'}}) SET n{counter}.prevalence = {v} WITH n{counter}\n"
+        session.run(setting_query)
+
 
 
 

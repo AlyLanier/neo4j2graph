@@ -1,5 +1,57 @@
-MATCH (leaf:ValueNode) WHERE NOT (leaf)-[:CONTAINS]->() AND (leaf.identifier IN ["5c9573292a0784c352a1c1d1cfac4242", "451c9c90e9fb8dde88ebc62a989144a8"] OR elementId(leaf) IN ["4:ff0859ac-496c-403c-b1cb-8a0bb1eafbc9:236", "4:ff0859ac-496c-403c-b1cb-8a0bb1eafbc9:276", "4:ff0859ac-496c-403c-b1cb-8a0bb1eafbc9:285", "4:ff0859ac-496c-403c-b1cb-8a0bb1eafbc9:232", "4:ff0859ac-496c-403c-b1cb-8a0bb1eafbc9:229", "4:ff0859ac-496c-403c-b1cb-8a0bb1eafbc9:270", "4:ff0859ac-496c-403c-b1cb-8a0bb1eafbc9:245"])
-MATCH p = (root:ValueNode)-[:CONTAINS*]->(leaf)
+TSM_Slicing --> Combinatorial coverage
+
+WITH [] AS leafEID, ["5c9573292a0784c352a1c1d1cfac4242", "451c9c90e9fb8dde88ebc62a989144a8", "bf3e3b05381504e80404b2f86cfb43e7"] AS leafPID
+WITH leafEID, leafPID, size(leafEID) + size(leafPID) AS len
+
+MATCH (root:ValueNode) WHERE NOT (root) <-- ()
+MATCH (root)-[:CONTAINS*]->(leaf:ValueNode) WHERE NOT (leaf)-[:CONTAINS]->() AND (leaf.identifier IN leafPID OR elementId(leaf) IN leafEID)
+WITH size(collect(DISTINCT leaf)) AS sizes, root, len
+MATCH p = (root)-[*]->(n) WHERE sizes = len AND (EXISTS{ MATCH t = (root)-[*]->(n) WHERE t <> p })
+WITH root
+
+MATCH (root)-[:CONTAINS*]->(vn:ValueNode) WHERE NOT (vn)-[:CONTAINS]->() AND (vn.identifier IN ["5c9573292a0784c352a1c1d1cfac4242", "451c9c90e9fb8dde88ebc62a989144a8"] OR elementId(vn) IN ["4:ff0859ac-496c-403c-b1cb-8a0bb1eafbc9:236", "4:ff0859ac-496c-403c-b1cb-8a0bb1eafbc9:276", "4:ff0859ac-496c-403c-b1cb-8a0bb1eafbc9:285", "4:ff0859ac-496c-403c-b1cb-8a0bb1eafbc9:232", "4:ff0859ac-496c-403c-b1cb-8a0bb1eafbc9:229", "4:ff0859ac-496c-403c-b1cb-8a0bb1eafbc9:270", "4:ff0859ac-496c-403c-b1cb-8a0bb1eafbc9:245"])
+WITH collect(vn) AS root_coverage, elementId(root) AS _
+UNWIND apoc.coll.combinations(root_coverage, 2) as node_couple
+WITH node_couple, count(node_couple) AS weight
+CALL apoc.coll.elements(node_couple) YIELD _1n, _2n
+CALL apoc.create.vRelationship(_1n, 'COMBINED', {weight: weight}, _2n) YIELD rel
+RETURN _1n, rel, _2n, weight
+ORDER BY weight DESC
+
+
+
+
+
+TSM_Slicing Sets
+
+WITH [] AS leafEID, ["e85d871ca1c462779aaf1744b4af9166", "c4e69f57bd3f4f982e66ec0ef79b60b8", "85566b2d3a615411b3ace3e3a46b65f2", "81eee885f7aa37a349c0f48494b3f100"] AS leafPID
+WITH leafEID, leafPID, size(leafEID) + size(leafPID) AS len
+
+MATCH (root:ValueNode) #WHERE NOT (root) <-- ()
+MATCH (root)-[:CONTAINS*]->(leaf:ValueNode) WHERE NOT (leaf)-[:CONTAINS]->() AND (leaf.identifier IN leafPID OR elementId(leaf) IN leafEID)
+WITH size(collect(DISTINCT leaf)) AS sizes, root, len
+
+MATCH p = (root)-[*]->(n) WHERE sizes = len AND (EXISTS{ MATCH t = (root)-[*]->(n) WHERE t <> p })
+WITH p, root, nodes(p) AS Nodes, relationships(p) AS Relations
+
+MATCH (o:ValueNode) WHERE o in Nodes
+MATCH (q:SpecificationNode) WHERE q in Nodes
+MATCH pr = ()-[r:CONTAINS]->() WHERE r IN Relations
+MATCH ps = ()-[s:IS_SPECIFIED_BY]->() WHERE s IN Relations
+WITH collect(DISTINCT o) AS Vv, collect(DISTINCT q) AS Vs, collect(DISTINCT pr) AS Ec, collect(DISTINCT ps) AS Es, root
+RETURN Vv, Vs, Ec, Es
+
+
+TSM_Slicing simple
+
+WITH [] AS leafEID, ["5c9573292a0784c352a1c1d1cfac4242", "451c9c90e9fb8dde88ebc62a989144a8", "bf3e3b05381504e80404b2f86cfb43e7"] AS leafPID
+WITH leafEID, leafPID, size(leafEID) + size(leafPID) AS len
+
+MATCH (root:ValueNode) #WHERE NOT (root) <-- ()
+MATCH (root)-[:CONTAINS*]->(leaf:ValueNode) WHERE NOT (leaf)-[:CONTAINS]->() AND (leaf.identifier IN leafPID OR elementId(leaf) IN leafEID)
+WITH size(collect(DISTINCT leaf)) AS sizes, root, len
+
+MATCH p = (root)-[*]->(n) WHERE sizes = len AND (EXISTS{ MATCH t = (root)-[*]->(n) WHERE t <> p })
 RETURN p
 
 
