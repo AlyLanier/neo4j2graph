@@ -4,10 +4,9 @@ import json
 import hashlib
 from numpy import format_float_scientific
 
-NODE_SIMPLE_TYPES = (str, int, float, bool, type(None))
+NODE_SIMPLE_TYPES = (str, int, float, bool)
 NODE_COMPOSITE_TYPES = (list, dict)
 TYPES = {
-    type(None) : 0,
     bool : 1,
     int : 2,
     float : 3,
@@ -129,7 +128,8 @@ class TCM:
         root = self.create_node("root", None, path)
         nodes = [root]
         edges = []
-        self.nodify_rec(data, root, nodes, edges, path)
+        sig = self.nodify_rec(data, root, nodes, edges, path)
+        if sig is None: return [], []
         return nodes, edges
 
     def nodify_rec(self, data, mother_node, nodes, edges, current_path):
@@ -138,8 +138,10 @@ class TCM:
 
         signature_items = []
         for k, v in generator:
-            signature_items.append(self.process_node(k, v, mother_node, nodes, edges, f"{current_path}.{k}"))
+            sig = self.process_node(k, v, mother_node, nodes, edges, f"{current_path}.{k}")
+            if sig: signature_items.append(sig)
         
+        if signature_items == []: return None
         signature = (mother_node.name(), (data_type, sorted(signature_items)))
         mother_node.set_signature(signature[1])
         return signature
@@ -151,9 +153,12 @@ class TCM:
             new_node = self.create_node(k, casted_value, current_path)
             signature = (k, ("scalar", TCM.cast_for_signature(casted_value)))
             new_node.set_signature(signature[1])
-        else:
+        elif v is not None:
             new_node = self.create_node(k, None, current_path)
             signature = self.nodify_rec(v, new_node, nodes, edges, current_path)
+            if signature is None: return None
+        else:
+            return None
 
         nodes.append(new_node)
         edges.append(self.create_edge(mother_node, new_node))
@@ -187,9 +192,8 @@ class TCM:
     
     @staticmethod
     def cast_for_signature(obj):
-        if obj is None:                           return "None"
-        elif isinstance(obj, (bool, int, float)): return format_float_scientific(obj)
-        else:                                     return obj
+        if isinstance(obj, (bool, int, float)): return format_float_scientific(obj)
+        else:                                   return obj
         
     
     ###################### getters & node-edge creators ####################
