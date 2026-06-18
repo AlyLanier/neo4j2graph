@@ -6,8 +6,6 @@ from functools import reduce
 from itertools import compress
 from pydoc import locate
 
-#TODO ajouter les check de type du tsm
-
 class TCMtoDB:
     MAX_MATCH_PER_QUERY = 15
     final_queries = {"node_creation" : [], "node_matching" : {}, "edge_creation" : []}
@@ -17,7 +15,7 @@ class TCMtoDB:
     ################## Expanding db with a tcm ######################
     @staticmethod
     def expand_neo4j_tsm(driver, db, tcm):
-        unified_tcm = tcm.unify_types()
+        unified_tcm = tcm.unify_types() # needed for type consistency
         TCMtoDB.final_queries = {"node_creation" : [], "node_matching" : {}, "edge_creation" : []}
         TCMtoDB.path_of_s_nodes_to_create = []
         TCMtoDB.db_existing_nodes = []
@@ -36,9 +34,9 @@ class TCMtoDB:
         if TCMtoDB.is_possible_query(mother_specification_element):
             db_sn_element = TCMtoDB.query_find_s_option(session, mother_specification_element, current_node)
         
-        if db_sn_element is not None:
+        if db_sn_element is not None:#TODO process type here
             new_msn_element = db_sn_element.element_id
-        else:
+        else: # no need to process type here because the TCM has been unified in the init so each equivalent tcm node has the same type
             if mother_specification_element is None: new_msn_element = TCMtoDB.process_root(session, current_node) #node is root
             else:                                    new_msn_element = TCMtoDB.process_node(session, current_node, mother_specification_element)
         
@@ -99,7 +97,7 @@ class TCMtoDB:
     
 
     ################## Processing node type ###########################
-    #TODO not put into main function, must be tested
+    #TODO not put into main function, must be tested TODO no more leaf node with null value
     @staticmethod
     def process_type_db(current_node, db_sn_element):
         current_node_valtype = locate(current_node.get_stype())

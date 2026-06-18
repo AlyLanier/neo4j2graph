@@ -127,7 +127,9 @@ class TSM:
     def process_option_value(self, current_node, tcm_nodes, tcm_edges):
         v_nodes = self.get_value_nodes()
         for v_node in v_nodes:
-            if v_node.get_identifier() == current_node.get_identifier(): return #TODO type update si il faut
+            if v_node.get_identifier() == current_node.get_identifier(): return
+                # in theory we could process the type of the current_node to update its specification, but if current_node has a value consistent
+                # with the nodes already in the tsm, no need to update the type for now
 
         new_v_node = TSM.create_v_node(*current_node.get_v_node_creation_info())
         self.add_value_node(new_v_node)
@@ -160,7 +162,7 @@ class TSM:
             tsm_v_node_child = TCM.find_node_from_hash(v_nodes, current_node_child)
             self.add_containment_edge(new_v_node, tsm_v_node_child)
     
-    def process_type(self, tsm_v_node, tsm_s_node):#TODO faire attention au type meme si la nouvelle node est déjà dans le graph, meme valeur mais type différent
+    def process_type(self, tsm_v_node, tsm_s_node):
         if tsm_s_node.stype() in NODE_COMPOSITE_TYPES: return 
         tsm_new_v_type = type(tsm_v_node.val())
         tsm_s_nodetype = tsm_s_node.stype()
