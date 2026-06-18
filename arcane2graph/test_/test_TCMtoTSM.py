@@ -74,8 +74,7 @@ def test_acyclic_extended_rec(node, edges, verified_nodes, depth_counter):
 
 def test_vn_sn_type_verification(spec_edges):
     for edge in spec_edges:
-        # TODO delete first condition when None value leaf nodes are removed from the graph
-        assert edge.source().val() == None or (edge.source().val() == None and edge.target().stype() in NODE_COMPOSITE_TYPES) or isinstance(edge.source().val(), edge.target().stype())
+        assert (edge.source().val() == None and edge.target().stype() in NODE_COMPOSITE_TYPES) or isinstance(edge.source().val(), edge.target().stype())
 
 def test_vn_child_spec_is_vn_spec_child(tsm):
     vce, sce = tsm.get_containment_value_edges(), tsm.get_containment_specification_edges()
@@ -90,15 +89,17 @@ def test_tsm(tsm):
 
 
 
-json_path = "arc_json"
+json_path = "arc_json/arc_json_tests"
 processed_json = []
 for filename in os.listdir(json_path):
     if filename.endswith(".json"):
         file_path = os.path.join(json_path, filename)
         processed_json.append(TCM(file_path, 'mahyco'))
-tsm_combinations = list(combinations(processed_json, len(processed_json)-1))[::2]
+tsm_combinations = list(combinations(processed_json, len(processed_json)-1))
 for comb in tsm_combinations:
     tsm = TSM(list(comb))
     test_tsm(tsm)
+tsm = TSM(processed_json)
+test_tsm(tsm)
 print("ALL tests validated")
     

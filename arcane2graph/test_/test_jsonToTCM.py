@@ -9,7 +9,7 @@ def test_node(node):
 def test_structure(tcm):
     nodes, edges = tcm.get_model()
 
-    test_node_types(nodes, Node)
+    test_node_types((nodes, Node))
     for obj in nodes:
         test_node(obj)
     
@@ -76,12 +76,13 @@ def test_tcm(tcm):
         
 
 
-json_path = "arc_json"
+json_path = "arc_json/arc_json_tests"
 for filename in os.listdir(json_path):
     if filename.endswith(".json"):
         file_path = os.path.join(json_path, filename)
         print(file_path)
         tcm = TCM(file_path, 'mahyco')
+        tcm.show_tcm()
         test_tcm(tcm)
 print("ALL tests have been validated")
     

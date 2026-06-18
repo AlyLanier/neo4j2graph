@@ -1,0 +1,115 @@
+{
+  "case": {
+    "@codeversion": "1.0",
+    "@codename": "Mahyco",
+    "@xml:lang": "en",
+    "main": {
+      "do-time-history": "1",
+      "write-history-period": "0"
+    },
+    "master": null,
+    "arcane-cea-verifier": {
+      "verify": "0",
+      "generate": "0",
+      "reference-file": "verif",
+      "compare-parallel-sequential": "0",
+      "result-file": "compare.xml",
+      "verifier-service-name": "ArcaneBasicVerifier2",
+      "files-in-output-dir": "0"
+    },
+    "arcane-checkpoint": {
+      "frequency": "0",
+      "period": "0",
+      "frequency-cpu": "0",
+      "do-dump-at-end": "0",
+      "checkpoint-service": {
+        "@name": "ArcaneBasic2CheckpointWriter",
+        "format-version": "2",
+        "data-compressor": null
+      }
+    },
+    "arcane-post-processing": {
+      "output-frequency": "0",
+      "output-period": "50",
+      "output-history-period": "1",
+      "output-history-shrink": "0",
+      "save-init": "0",
+      "save-final-time": "1",
+      "end-execution-output": "0",
+      "format": {
+        "@name": "Ensight7PostProcessor",
+        "fileset-size": "0",
+        "use-degenerated-hexa": "1",
+        "binary-file": "0",
+        "force-first-geometry": "0",
+        "save-uids": "0"
+      },
+      "output": {
+        "variable": "CellMass Pressure Density Velocity NodeMass InternalEnergy PseudoViscosity Materiau",
+        "group": null
+      }
+    },
+    "mahyco": {
+      "final-time": "3e0",
+      "cfl": "0.3",
+      "threshold": "1e-10",
+      "sans-lagrange": "0",
+      "with-newton": "0",
+      "with-projection": "1",
+      "cas-model": {
+        "@name": "Sod",
+        "reverse-option": "0",
+        "parameter": "0",
+        "cas-test": "bi-sod-case-x"
+      },
+      "test_alyssia":{
+        "nested_empty":{
+          "double_nested_empty":{
+            "null_value": null
+          }
+        },
+        "not_empty":{
+          "hello": "world"
+        }
+      },
+      "boundary-condition": [
+        {
+          "surface": "XMIN",
+          "value": "0",
+          "type": "vx"
+        },
+        {
+          "surface": "XMAX",
+          "value": "0",
+          "type": "vx"
+        },
+        {
+          "surface": "YMIN",
+          "value": "0",
+          "type": "vy"
+        },
+        {
+          "surface": "YMAX",
+          "value": "0",
+          "type": "vy"
+        },
+        {
+          "surface": "ZMIN",
+          "value": "0",
+          "type": "vz"
+        },
+        {
+          "surface": "ZMAX",
+          "value": "0",
+          "type": "vz"
+        }
+      ]
+    },
+    "acc-env-default": {
+      "acc-mem-advise": "1",
+      "device-affinity": null,
+      "heterog-partition": null,
+      "var-sync-version": null
+    }
+  }
+}

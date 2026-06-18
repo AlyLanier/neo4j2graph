@@ -1,5 +1,5 @@
 import os
-import re
+import sys
 from neo4j import GraphDatabase
 from TCMtoTSM import TSM
 from jsonToTCM import TCM
@@ -36,7 +36,6 @@ def TSM_creation_query(tsm):
     for edge in tsm.get_specification_edges():
         query += edge_creation_query(edge, ":IS_SPECIFIED_BY") + "\n"
     
-    print(query)
     return query[:-1]
 
 
@@ -74,5 +73,8 @@ def main():
 
         
 
-if __name__ == '__main__':
-    main()
+if __name__ == "__main__":
+    args = sys.argv
+    if len(args) == 1: main()
+    elif args[1] == 'test':
+        import test_.test_TSMtoNeo4j
