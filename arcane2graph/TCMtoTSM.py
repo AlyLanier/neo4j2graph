@@ -1,5 +1,6 @@
 import os
-from jsonToTCM import TCM, Edge, TYPES
+import sys
+from jsonToTCM import TCM, Edge, TYPES, NODE_COMPOSITE_TYPES
 
 class SNode:
     def __init__(self, name, stype):
@@ -126,7 +127,7 @@ class TSM:
     def process_option_value(self, current_node, tcm_nodes, tcm_edges):
         v_nodes = self.get_value_nodes()
         for v_node in v_nodes:
-            if v_node.get_identifier() == current_node.get_identifier(): return
+            if v_node.get_identifier() == current_node.get_identifier(): return #TODO type update si il faut
 
         new_v_node = TSM.create_v_node(*current_node.get_v_node_creation_info())
         self.add_value_node(new_v_node)
@@ -159,7 +160,8 @@ class TSM:
             tsm_v_node_child = TCM.find_node_from_hash(v_nodes, current_node_child)
             self.add_containment_edge(new_v_node, tsm_v_node_child)
     
-    def process_type(self, tsm_v_node, tsm_s_node):
+    def process_type(self, tsm_v_node, tsm_s_node):#TODO faire attention au type meme si la nouvelle node est déjà dans le graph, meme valeur mais type différent
+        if tsm_s_node.stype() in NODE_COMPOSITE_TYPES: return 
         tsm_new_v_type = type(tsm_v_node.val())
         tsm_s_nodetype = tsm_s_node.stype()
         if tsm_s_nodetype == tsm_new_v_type: return
@@ -170,7 +172,6 @@ class TSM:
             self.update_value_nodes_types(tsm_s_node)
         else:
             tsm_v_node.cast(tsm_s_nodetype)
-        
     
     def update_value_nodes_types(self, s_node):
         # never used on s_node with type NoneType
@@ -190,12 +191,15 @@ def main():
         if filename.endswith(".json"):
             file_path = os.path.join(json_path, filename)
             print(file_path)
-            test = TCM(file_path)
+            test = TCM(file_path, 'mahyco')
             processed_json.append(test)
             if len(processed_json) >= 2:
                 break
     
     test_tsm = TSM(processed_json)
 
-if __name__ == '__main__':
-    main()
+if __name__ == "__main__":
+    args = sys.argv
+    if len(args) == 1: main()
+    elif args[1] == 'test':
+        import test_.test_TCMtoTSM

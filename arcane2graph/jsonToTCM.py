@@ -1,4 +1,5 @@
 import os
+import sys
 import json
 import hashlib
 from numpy import format_float_scientific
@@ -94,27 +95,37 @@ class Edge:
 
 class TCM:
 
-    def __init__(self, file_path):
-        self.nodes, self.edges = self.json_to_tcm(file_path)
+    def __init__(self, file_path, data_key):
+        self.nodes, self.edges = self.json_to_tcm(file_path, data_key)
     
 
     ################# Loading data from json file #################
 
-    def json_to_tcm(self, file):
+    def json_to_tcm(self, file, data_key):
         with open(file, "r", encoding="utf-8") as f:
             try:
                 data = json.load(f)
             except Exception as e:
                 print(f"[ERROR] Failed to parse {file}: {e}")
-        
-        return self.nodify(data)
+        return self.nodify(data, data_key)
+    
+    @staticmethod
+    def find_real_data(data, key):
+        if key in data:
+            return data[key]
+        else:
+            for values in data.values():
+                if isinstance(values, dict):
+                    ret = TCM.find_real_data(values, key)
+                    if ret: return ret
+
     
 
     ############ functions to transform data into Test Case Model ###########
 
-    def nodify(self, data):
-        data = data['case']['mahyco']
-        path = "mahyco"
+    def nodify(self, data, data_key):
+        data = TCM.find_real_data(data, data_key)
+        path = data_key
         root = self.create_node("root", None, path)
         nodes = [root]
         edges = []
@@ -318,7 +329,7 @@ def main():
         if filename.endswith(".json"):
             file_path = os.path.join(json_path, filename)
             print(file_path)
-            test = TCM(file_path)
+            test = TCM(file_path, 'mahyco')
             processed_json.append(test)
             if len(processed_json) >= max_process:
                 break
@@ -333,4 +344,7 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    args = sys.argv
+    if len(args) == 1: main()
+    elif args[1] == 'test':
+        import test_.test_jsonToTCM

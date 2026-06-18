@@ -268,7 +268,7 @@ def main():
             if counter < 2: continue
             file_path = os.path.join(json_path, filename)
             print(file_path)
-            test = TCM(file_path)
+            test = TCM(file_path, 'mahyco')
             processed_json.append(test)
             break
 
