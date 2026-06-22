@@ -26,6 +26,9 @@ class Node:
     def __repr__(self):
         return f"N({self.name()}, {self.val()}, {self._type})"
     
+    def corresponds_to(self, other):
+        return self.get_identifier() == other.get_identifier()
+    
     def name(self):
         return self.n
 
@@ -86,6 +89,9 @@ class Edge:
     def __repr__(self):
         return f"E({self.source()} -> {self.target()})"
     
+    def corresponds_to(self, other):
+        return self.source().corresponds_to(other.source()) and self.target().corresponds_to(other.target())
+    
     def source(self):
         return self.src
 
@@ -96,6 +102,7 @@ class TCM:
 
     def __init__(self, file_path, data_key):
         self.nodes, self.edges = self.json_to_tcm(file_path, data_key)
+        
     
 
     ################# Loading data from json file #################
@@ -305,7 +312,7 @@ class TCM:
         paths = {}
         for node in self.get_nodes():
             if node.get_path() in paths:
-                paths[node.get_path()].append[node]
+                paths[node.get_path()].append(node)
             else:
                 paths[node.get_path()] = [node]
         
@@ -319,9 +326,6 @@ class TCM:
                 
                 for node in nodes:
                     node.cast(best_type)
-
-
-
         
 
 
@@ -341,8 +345,6 @@ def main():
     max_show = 2
     for tcm in processed_json[:max_show]:
         tcm.show_tcm()
-        #for node in tcm.get_nodes():
-        #    print(node.get_path(), node.get_signature())
             
 
 

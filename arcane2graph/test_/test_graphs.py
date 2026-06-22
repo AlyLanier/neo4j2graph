@@ -28,7 +28,7 @@ def test_edge_types(edge_list, edge_type, additional_conditions = []):
 
 def test_duplicate(*lists):
     for l in lists:
-        assert len(l) == len(set(l))
+        assert len(l) == len(set(l)) # set compares nodes so it ensures no duplicate object is here
 
 def test_unique_root(*node_list_and_edge_list):
     for node_list, edge_list in node_list_and_edge_list:

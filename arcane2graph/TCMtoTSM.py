@@ -33,6 +33,9 @@ class VNode:
     def __repr__(self):
         return f"VN({self.val()})"
     
+    def corresponds_to(self, other):
+        return self.get_identifier() == other.get_identifier()
+    
     def get_identifier(self):
         return self.i
 

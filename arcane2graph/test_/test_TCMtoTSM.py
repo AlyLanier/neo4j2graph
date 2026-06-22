@@ -81,6 +81,24 @@ def test_vn_child_spec_is_vn_spec_child(tsm):
     for edge in vce:
         assert len(TCM.find_edges(sce, tsm.spec(edge.source()), tsm.spec(edge.target()))) == 1
 
+def test_TSM_contains_TCMs(tsm, tcms):
+    vn, cve = tsm.get_value_nodes(), tsm.get_containment_value_edges()
+    for tcm in tcms:
+        nodes, edges = tcm.get_model()
+        for node in nodes:
+            exists = False
+            for v_node in vn:
+                if v_node.corresponds_to(node):
+                    exists = True
+                    break
+            assert exists
+        for edge in edges:
+            exists = False
+            for v_edge in cve:
+                if v_edge.corresponds_to(edge):
+                    exists = True
+                    break
+            assert exists
 
 
 def test_tsm(tsm):
@@ -95,11 +113,14 @@ for filename in os.listdir(json_path):
     if filename.endswith(".json"):
         file_path = os.path.join(json_path, filename)
         processed_json.append(TCM(file_path, 'mahyco'))
-tsm_combinations = list(combinations(processed_json, len(processed_json)-1))
-for comb in tsm_combinations:
+tcm_combinations = list(combinations(processed_json, len(processed_json)-1))
+for comb in tcm_combinations:
     tsm = TSM(list(comb))
     test_tsm(tsm)
+    test_TSM_contains_TCMs(tsm, list(comb))
+
 tsm = TSM(processed_json)
 test_tsm(tsm)
+test_TSM_contains_TCMs(tsm, processed_json)
 print("ALL tests validated")
     

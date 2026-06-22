@@ -4,7 +4,7 @@ from test_.test_graphs import *
 #################### TESTS ######################""
 
 def test_node(node):
-    assert node.val() is None or node._type is None
+    assert node.val() != node._type # don't want them both to be None
 
 def test_structure(tcm):
     nodes, edges = tcm.get_model()
@@ -82,7 +82,6 @@ for filename in os.listdir(json_path):
         file_path = os.path.join(json_path, filename)
         print(file_path)
         tcm = TCM(file_path, 'mahyco')
-        tcm.show_tcm()
         test_tcm(tcm)
 print("ALL tests have been validated")
     
