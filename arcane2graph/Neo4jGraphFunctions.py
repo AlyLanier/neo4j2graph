@@ -1,3 +1,5 @@
+from TCMtoTSM import TSM, VNode, SNode, Edge
+from jsonToTCM import *
 from TSMtoNeo4j import sanitize
 from neo4j import GraphDatabase
 from MeanFunctions import *
@@ -7,6 +9,18 @@ class GraphFunctions:
     @staticmethod
     def stringify_ids(list_node_ids):
         return str([node['identifier'] for node in list_node_ids if isinstance(node, dict)]), str([node for node in list_node_ids if isinstance(node, str)])
+
+
+    ########## Get TSM from DB ################
+
+    @staticmethod
+    def get_TSM_query():
+        return """MATCH (o:ValueNode) WITH collect(o) AS vn
+MATCH (q:SpecificationNode) WITH vn, collect(q) AS sn
+MATCH pr = ()-[:CONTAINS]->() WITH vn, sn, collect(reduce(output = [], n IN nodes(pr) | output + n)) AS ce
+MATCH ps = ()-[:IS_SPECIFIED_BY]->() WITH vn, sn, ce, collect(reduce(output = [], n IN nodes(ps) | output + n)) as se
+RETURN vn, sn, ce, se
+"""
 
 
     ######### Option Coverage ##############
@@ -139,8 +153,6 @@ WITH root"""
         CC_part = additional_conditions, with_self_reference
         query = GraphFunctions.TSM_Slicing_for_cc_query(*Slicing_part) + '\n' + GraphFunctions.combinatorial_coverage_from_slicing_query(*CC_part)
         return session.run(query)
-
-    
         
     
     ################## Node prevalence update ##############
@@ -172,6 +184,30 @@ RETURN node, collect(leaf)"""
         for k, v in id_prevalence.items():
             setting_query += f"MATCH (n{counter} {{identifier: '{k}'}}) SET n{counter}.prevalence = {v} WITH n{counter}\n"
         session.run(setting_query)
+
+
+    ################## create TSM from DB ######################
+
+    @staticmethod
+    def TSM_from_db(session):
+        db_vn, db_sn, db_ce, db_se = session.run(GraphFunctions.get_TSM_query()).single()
+        finding_method_vn = lambda node_element : TCM.find_node(ce, lambda node: node.get_identifier() == node_element['identifier'])
+        finding_method_sn = lambda node_element : TCM.find_node(ce, lambda node: node[1] == node_element.element_id)
+        vn = [VNode(node_element['identifier'], node_element['value']) for node_element in db_vn]
+        sn = [(SNode(node_element['name'], node_element['type']), node_element.element_id) for node_element in db_sn]
+        ce = []
+        for edge in db_ce:
+            if "ValueNode" in edge[0].labels:   finding_method = finding_method_vn
+            else:                               finding_method = finding_method_sn
+            ce.append(Edge(finding_method(edge[0]), finding_method(edge[1])))
+        se = []
+        for edge in db_se:
+            se.append(Edge(finding_method_vn(edge[0]), finding_method_sn(edge[1])))
+        sn = list(map(lambda x : x[0], sn))
+        return TSM([], vn, sn, ce, se) #TODO verif si c'est correct
+    #TODO voir si on peut verifier si le TSM est bon directement via la db
+
+
 
 
 
