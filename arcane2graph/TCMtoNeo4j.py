@@ -1,27 +1,27 @@
-from jsonToTCM import TCM, Node, TYPES
+from jsonToTCM import TCM, TYPES
 from TSMtoNeo4j import sanitize
 from neo4j import GraphDatabase
-import os
+import os, sys
 from functools import reduce
 from itertools import compress
 from pydoc import locate
 
 class TCMtoDB:
     MAX_MATCH_PER_QUERY = 15
-    final_queries = {"node_creation" : [], "node_matching" : {}, "edge_creation" : []}
+    final_queries = {"node_creation" : [], "node_matching" : {}, "edge_creation" : [], "type_change" : {}}
     path_of_s_nodes_to_create = []
     db_existing_nodes = []
 
     ################## Expanding db with a tcm ######################
     @staticmethod
     def expand_neo4j_tsm(driver, db, tcm):
-        unified_tcm = tcm.unify_types() # needed for type consistency
-        TCMtoDB.final_queries = {"node_creation" : [], "node_matching" : {}, "edge_creation" : []}
+        tcm.unify_types() # needed for type consistency
+        TCMtoDB.final_queries = {"node_creation" : [], "node_matching" : {}, "edge_creation" : [], "type_change" : {}}
         TCMtoDB.path_of_s_nodes_to_create = []
         TCMtoDB.db_existing_nodes = []
         with driver.session(database = db) as session:
-            TCMtoDB.db_existing_nodes = TCMtoDB.already_existing_nodes(session, unified_tcm)
-            TCMtoDB.process_option_value_to_neo4j(session, None, unified_tcm.search_root(unified_tcm.get_edges()), *unified_tcm.get_model())
+            TCMtoDB.db_existing_nodes = TCMtoDB.already_existing_nodes(session, tcm)
+            TCMtoDB.process_option_value_to_neo4j(session, None, tcm.search_root(tcm.get_edges()), *tcm.get_model())
             TCMtoDB.process_final_queries(session)
 
     @staticmethod
@@ -34,8 +34,9 @@ class TCMtoDB:
         if TCMtoDB.is_possible_query(mother_specification_element):
             db_sn_element = TCMtoDB.query_find_s_option(session, mother_specification_element, current_node)
         
-        if db_sn_element is not None:#TODO process type here
+        if db_sn_element is not None:
             new_msn_element = db_sn_element.element_id
+            TCMtoDB.process_type_db(current_node, db_sn_element)
         else: # no need to process type here because the TCM has been unified in the init so each equivalent tcm node has the same type
             if mother_specification_element is None: new_msn_element = TCMtoDB.process_root(session, current_node) #node is root
             else:                                    new_msn_element = TCMtoDB.process_node(session, current_node, mother_specification_element)
@@ -97,15 +98,13 @@ class TCMtoDB:
     
 
     ################## Processing node type ###########################
-    #TODO not put into main function, must be tested TODO no more leaf node with null value
     @staticmethod
     def process_type_db(current_node, db_sn_element):
         current_node_valtype = locate(current_node.get_stype())
-        db_sn_type = locate(db_sn_element.properties.type)
+        db_sn_type = locate(db_sn_element['type'])
         if db_sn_element.element_id in TCMtoDB.final_queries["type_change"] and TYPES[TCMtoDB.final_queries["type_change"][db_sn_element.element_id]] > TYPES[db_sn_type]:
             db_sn_type = TCMtoDB.final_queries["type_change"][db_sn_element.element_id]
         if db_sn_type == current_node_valtype: return
-
         if TYPES[db_sn_type] < TYPES[current_node_valtype]:
             TCMtoDB.final_queries["type_change"][db_sn_element.element_id] = TCMtoDB.update_tsm_types(db_sn_element, current_node, db_sn_type, current_node_valtype)
         else:
@@ -115,7 +114,7 @@ class TCMtoDB:
     @staticmethod
     def update_tsm_types(db_sn_element, current_node, db_sn_type, current_node_valtype):
         update_sn_query = f"""MATCH (sn:SpecificationNode) WHERE elementId(sn) = '{db_sn_element.element_id}'
-SET sn.type = '{current_node.get_stype()}'"""
+SET sn.type = '{current_node.get_stype()}' WITH sn\n"""
         cast_method = "n.value"
         if db_sn_type == bool:
             cast_method = TCMtoDB.Neo4j_type_cast(cast_method, int)
@@ -124,8 +123,8 @@ SET sn.type = '{current_node.get_stype()}'"""
         elif current_node_valtype == str:
             cast_method = TCMtoDB.Neo4j_type_cast(cast_method, str)
 
-        update_vn_query = f"""MATCH (vn:ValueNode) WHERE (sn)<-[:IS_SPECIFIED_BY]-(vn)
-FOREACH(n IN collect(vn) | SET n.value = {cast_method})"""
+        update_vn_query = f"""MATCH (vn:ValueNode) WHERE (sn)<-[:IS_SPECIFIED_BY]-(vn) WITH collect(vn) as value_nodes
+FOREACH(n IN value_nodes | SET n.value = {cast_method})"""
         return update_sn_query + update_vn_query
         
     @staticmethod
@@ -187,6 +186,7 @@ FOREACH(n IN collect(vn) | SET n.value = {cast_method})"""
     @staticmethod
     def process_final_queries(session):
         TCMtoDB.process_node_creation_query(session)
+        TCMtoDB.process_type_change(session)
         TCMtoDB.process_edge_creation_queries(session)
     
     @staticmethod
@@ -198,21 +198,23 @@ FOREACH(n IN collect(vn) | SET n.value = {cast_method})"""
             creation_query, identifier = function(i)
             query += creation_query+'\n'
             if identifier is not None: element_ids_to_return.append((f"e{i}", identifier))
-        if element_ids_to_return != []: 
-            query += "RETURN "+reduce(lambda x, y: x+', '+y, map(lambda e: e[0], element_ids_to_return))
-        else:
-            print(query)
+        
+        if element_ids_to_return == []:
             session.run(query)
             return
         
-        print(query)
-        #return
+        query += "RETURN "+reduce(lambda x, y: x+', '+y, map(lambda e: e[0], element_ids_to_return))
         query_results = session.run(query).single()
 
         for i, node_element in enumerate(query_results):
             node_identifier = element_ids_to_return[i][1]
             TCMtoDB.final_queries["node_matching"][node_identifier] = (lambda counter : f"MATCH (e{counter}) WHERE elementId(e{counter}) = "), f"'{node_element.element_id}'"
 
+    @staticmethod
+    def process_type_change(session):
+        if TCMtoDB.final_queries["type_change"] != {}:
+            type_update_query = reduce(lambda x, y: x +"\n"+y, TCMtoDB.final_queries["type_change"].values())
+            session.run(type_update_query)
     
     @staticmethod
     def process_edge_creation_queries(session):
@@ -236,8 +238,6 @@ FOREACH(n IN collect(vn) | SET n.value = {cast_method})"""
             queries.append(TCMtoDB.final_edge_creation_queries(seen_identifiers, edges_to_create))
         
         queries = f"CALL apoc.cypher.runMany(\n  \"{reduce(lambda x, y: x + ';\n  '+y, queries)}\"\n,{{}});"
-        print(queries)
-        #return
 
         session.run(queries)
         
@@ -296,5 +296,8 @@ def main():
 
         
 
-if __name__ == '__main__':
-    main()
+if __name__ == "__main__":
+    args = sys.argv
+    if len(args) == 1: main()
+    elif args[1] == 'test':
+        import test_.test_TCMtoNeo4j
