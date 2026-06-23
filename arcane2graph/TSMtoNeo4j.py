@@ -45,20 +45,17 @@ def build_tsm(files):
     for filename in files:
         file_path = os.path.join(json_path, filename)
         print(file_path)
-        test = TCM(file_path)
+        test = TCM(file_path, 'mahyco')
         processed_json.append(test)
     
     return TSM(processed_json)
 
 def main():
-    
     test_tsm = build_tsm(['Mahyco_0x5b67d7517e00.json', 'Mahyco_0x5be0ee5cb7b0.json'])
     #test_tsm = build_tsm(['Mahyco_0x5be0ee5cb7b0.json'])
     #test_tsm = build_tsm(['Mahyco_0x5b67d7517e00.json'])
     string_for_neo4j = TSM_creation_query(test_tsm)
     
-
-    # URI examples: "neo4j://localhost", "neo4j+s://xxx.databases.neo4j.io"
     URI = "bolt://localhost:7687"
     AUTH = ("neo4j", "password")
 
@@ -71,6 +68,20 @@ def main():
         # build graph here
         driver.execute_query(string_for_neo4j)
 
+def main_populate():
+    json_path = 'arc_json'
+    TCM_files = [filename for filename in os.listdir(json_path) if filename.endswith(".json")]
+    test_tsm = build_tsm(TCM_files)
+    string_for_neo4j = TSM_creation_query(test_tsm)
+
+    URI = "bolt://localhost:7687"
+    AUTH = ("neo4j", "password")
+
+    with GraphDatabase.driver(URI, auth=AUTH) as driver:
+        driver.verify_connectivity()
+        driver.execute_query("MATCH (p)\nDETACH DELETE p") # remove current graph
+        print("deleted previous db")
+        driver.execute_query(string_for_neo4j) # build graph here
         
 
 if __name__ == "__main__":
@@ -79,3 +90,5 @@ if __name__ == "__main__":
     elif args[1] == 'test':
         import test_.test_TSMtoNeo4j as test
         test.validate_db_from_TSM()
+    elif args[1] == 'populate':
+        main_populate()
