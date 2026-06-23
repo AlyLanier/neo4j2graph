@@ -1,5 +1,6 @@
 from TCMtoTSM import TSM, VNode, SNode, Edge
 from jsonToTCM import *
+from pydoc import locate
 from TSMtoNeo4j import sanitize
 from neo4j import GraphDatabase
 from MeanFunctions import *
@@ -191,10 +192,11 @@ RETURN node, collect(leaf)"""
     @staticmethod
     def TSM_from_db(session):
         db_vn, db_sn, db_ce, db_se = session.run(GraphFunctions.get_TSM_query()).single()
-        finding_method_vn = lambda node_element : TCM.find_node(ce, lambda node: node.get_identifier() == node_element['identifier'])
-        finding_method_sn = lambda node_element : TCM.find_node(ce, lambda node: node[1] == node_element.element_id)
         vn = [VNode(node_element['identifier'], node_element['value']) for node_element in db_vn]
-        sn = [(SNode(node_element['name'], node_element['type']), node_element.element_id) for node_element in db_sn]
+        sn = [(SNode(node_element['name'], locate(node_element['type'])), node_element.element_id) for node_element in db_sn]
+        finding_method_vn = lambda node_element : TCM.find_node(vn, lambda node: node.get_identifier() == node_element['identifier'])
+        finding_method_sn = lambda node_element : TCM.find_node(sn, lambda node: node[1] == node_element.element_id)[0]
+
         ce = []
         for edge in db_ce:
             if "ValueNode" in edge[0].labels:   finding_method = finding_method_vn
@@ -204,8 +206,25 @@ RETURN node, collect(leaf)"""
         for edge in db_se:
             se.append(Edge(finding_method_vn(edge[0]), finding_method_sn(edge[1])))
         sn = list(map(lambda x : x[0], sn))
-        return TSM([], vn, sn, ce, se) #TODO verif si c'est correct
-    #TODO voir si on peut verifier si le TSM est bon directement via la db
+        return TSM([], vn, sn, ce, se)
+    
+    @staticmethod
+    def Db_Validity_query():
+        return """OPTIONAL MATCH (n) WHERE NOT n:ValueNode AND NOT n:SpecificationNode WITH collect(n) = [] AS n_types
+OPTIONAL MATCH p = (start:SpecificationNode)-[:CONTAINS]-(end:ValueNode) WITH collect(p) = [] AS e_contains, n_types
+OPTIONAL MATCH p = (start)-[:IS_SPECIFIED_BY]->(end) WHERE start:SpecificationNode OR end:ValueNode WITH collect(p) = [] as e_specifies, e_contains, n_types
+OPTIONAL MATCH (n:ValueNode) WHERE EXISTS{MATCH (m:ValueNode) WHERE m<>n AND m.identifier = n.identifier AND m.value = n.value} WITH collect(n) = [] AS duplicate, e_specifies, e_contains, n_types
+OPTIONAL MATCH (n:SpecificationNode) WHERE NOT (n)<-[:CONTAINS]-() WITH count(n) = 1 AS unique_root, duplicate, e_specifies, e_contains, n_types
+OPTIONAL MATCH (n) WHERE NOT (n)--() OR (n)--(n) WITH n IS NULL AS node_alone, unique_root, duplicate, e_specifies, e_contains, n_types
+OPTIONAL MATCH (n)-[:CONTAINS]->() WHERE (n:ValueNode AND n.value <> NULL) OR (n:SpecificationNode AND NOT n.type IN ['dict', 'list']) WITH n IS NULL AS node_structure, node_alone, unique_root, duplicate, e_specifies, e_contains, n_types
+OPTIONAL MATCH (m)<-[:IS_SPECIFIED_BY]-(n:ValueNode)-[:IS_SPECIFIED_BY]->(o) WITH n IS NULL as unique_spec, node_structure, node_alone, unique_root, duplicate, e_specifies, e_contains, n_types
+OPTIONAL MATCH (m)-[:CONTAINS]->(n:SpecificationNode)<-[:CONTAINS]-(o) WITH n IS NULL as unique_s_parent, unique_spec, node_structure, node_alone, unique_root, duplicate, e_specifies, e_contains, n_types
+OPTIONAL MATCH (n:ValueNode)-[:IS_SPECIFIED_BY]->(s:SpecificationNode) WHERE (s.type IN ['dict', 'list'] AND NOT n.value IS :: NULL) OR (s.type = 'bool' AND NOT n.value IS :: BOOLEAN) or (s.type = 'int' AND NOT n.value IS :: INTEGER) or (s.type = 'float' AND NOT n.value IS :: FLOAT) or (s.type = 'str' AND NOT n.value IS :: STRING) WITH n IS NULL as type_spec, unique_s_parent, unique_spec, node_structure, node_alone, unique_root, duplicate, e_specifies, e_contains, n_types
+OPTIONAL MATCH (msn:SpecificationNode)<-[:IS_SPECIFIED_BY]-(mvn:ValueNode)-[:CONTAINS]->(vn:ValueNode)-[:IS_SPECIFIED_BY]->(sn:SpecificationNode)<-[:CONTAINS]-(msn) WITH count(DISTINCT vn) AS prop_5, type_spec, unique_s_parent, unique_spec, node_structure, node_alone, unique_root, duplicate, e_specifies, e_contains, n_types
+MATCH (root:ValueNode) WHERE NOT (root)<--() WITH count(root) as nb_root, prop_5, type_spec, unique_s_parent, unique_spec, node_structure, node_alone, unique_root, duplicate, e_specifies, e_contains, n_types
+MATCH (n:ValueNode) WITH count(n) AS nb_node, nb_root, prop_5, type_spec, unique_s_parent, unique_spec, node_structure, node_alone, unique_root, duplicate, e_specifies, e_contains, n_types
+OPTIONAL MATCH (n)-[]->(m), cyclePath=shortestPath((m)-[*]->(n)) WITH cyclePath IS NULL as is_cycle, prop_5 = nb_node-nb_root AS spec_child_id_child_spec, type_spec, unique_s_parent, unique_spec, node_structure, node_alone, unique_root, duplicate, e_specifies, e_contains, n_types
+return all(elmnt in [is_cycle, spec_child_id_child_spec, type_spec, unique_s_parent, unique_spec, node_structure, node_alone, unique_root, duplicate, e_specifies, e_contains, n_types] WHERE elmnt = TRUE) as is_db_valid"""
 
 
 
@@ -236,5 +255,9 @@ def main():
             #slicing = GraphFunctions.TSM_Slicing(session, nodes_to_consider)
             pass
 
-if __name__ == '__main__':
-    main()
+if __name__ == "__main__":
+    args = sys.argv
+    if len(args) == 1: main()
+    elif args[1] == 'test':
+        import test_.test_DbToTSM as test
+        test.validate_db()

@@ -207,4 +207,5 @@ if __name__ == "__main__":
     args = sys.argv
     if len(args) == 1: main()
     elif args[1] == 'test':
-        import test_.test_TCMtoTSM
+        import test_.test_TCMtoTSM as test
+        test.validate_tsm()

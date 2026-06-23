@@ -105,22 +105,21 @@ def test_tsm(tsm):
     test_structure(tsm)
     test_validity(tsm)
 
+def validate_tsm():
+    json_path = "arc_json/arc_json_tests"
+    processed_json = []
+    for filename in os.listdir(json_path):
+        if filename.endswith(".json"):
+            file_path = os.path.join(json_path, filename)
+            processed_json.append(TCM(file_path, 'mahyco'))
+    tcm_combinations = list(combinations(processed_json, len(processed_json)-1))
+    for comb in tcm_combinations:
+        tsm = TSM(list(comb))
+        test_tsm(tsm)
+        test_TSM_contains_TCMs(tsm, list(comb))
 
-
-json_path = "arc_json/arc_json_tests"
-processed_json = []
-for filename in os.listdir(json_path):
-    if filename.endswith(".json"):
-        file_path = os.path.join(json_path, filename)
-        processed_json.append(TCM(file_path, 'mahyco'))
-tcm_combinations = list(combinations(processed_json, len(processed_json)-1))
-for comb in tcm_combinations:
-    tsm = TSM(list(comb))
+    tsm = TSM(processed_json)
     test_tsm(tsm)
-    test_TSM_contains_TCMs(tsm, list(comb))
-
-tsm = TSM(processed_json)
-test_tsm(tsm)
-test_TSM_contains_TCMs(tsm, processed_json)
-print("ALL tests validated")
+    test_TSM_contains_TCMs(tsm, processed_json)
+    print("ALL tests validated")
     

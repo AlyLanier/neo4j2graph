@@ -74,14 +74,13 @@ def test_tcm(tcm):
     test_structure(tcm)
     test_validity(tcm)
         
-
-
-json_path = "arc_json/arc_json_tests"
-for filename in os.listdir(json_path):
-    if filename.endswith(".json"):
-        file_path = os.path.join(json_path, filename)
-        print(file_path)
-        tcm = TCM(file_path, 'mahyco')
-        test_tcm(tcm)
-print("ALL tests have been validated")
+def validate_tcm():
+    json_path = "arc_json/arc_json_tests"
+    for filename in os.listdir(json_path):
+        if filename.endswith(".json"):
+            file_path = os.path.join(json_path, filename)
+            print(file_path)
+            tcm = TCM(file_path, 'mahyco')
+            test_tcm(tcm)
+    print("ALL tests have been validated")
     

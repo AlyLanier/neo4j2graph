@@ -28,7 +28,7 @@ class TCMtoDB:
     def process_option_value_to_neo4j(session, mother_specification_element, current_node, tcm_nodes, tcm_edges):
         if not (isinstance(mother_specification_element, dict) or (current_node.get_identifier() not in TCMtoDB.db_existing_nodes)): return
         if current_node.get_identifier() in TCMtoDB.final_queries["node_matching"]: return
-        print(f"Node to add to the graph : {current_node}") 
+        #print(f"Node to add to the graph : {current_node}") 
 
         db_sn_element = None
         if TCMtoDB.is_possible_query(mother_specification_element):
@@ -300,4 +300,5 @@ if __name__ == "__main__":
     args = sys.argv
     if len(args) == 1: main()
     elif args[1] == 'test':
-        import test_.test_TCMtoNeo4j
+        import test_.test_TCMtoNeo4j as test
+        test.validate_db_from_tcm()
