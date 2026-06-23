@@ -159,14 +159,33 @@ WITH root"""
     ################## Node prevalence update ##############
 
     @staticmethod
-    def prevalence(session, set_in_db = False):
+    def set_leaves_prevalence(session):
+        query = """MATCH (leaf:ValueNode)-[:IS_SPECIFIED_BY]->(sleaf:SpecificationNode) WHERE NOT (leaf)-[:CONTAINS]->()
+SET sleaf.occurrence = 0 WITH leaf, sleaf
+MATCH (root:ValueNode) WHERE NOT (root) <-- ()
+MATCH p = (root)-[:CONTAINS*]->(leaf) WITH collect(p) AS paths, leaf, sleaf
+CALL(paths, leaf){
+  WITH size(paths) AS occurrence, leaf
+  SET leaf.occurrence = occurrence
+}
+CALL(paths, sleaf){
+  WITH size(paths) AS occurrence, sleaf
+  SET sleaf.occurrence = sleaf.occurrence + occurrence
+}
+SET leaf.prevalence = toFloat(leaf.occurrence)/sleaf.occurrence"""
+        session.run(query)
+
+
+    @staticmethod #TODO do it with occurences and not computed leaf prevalence for more precision
+    def prevalence(session, compute_with_occurence = True, set_leaves_occurences = False, set_in_db = False):
+        if set_leaves_occurences: GraphFunctions.set_leaves_prevalence(session)
         id_prevalence = {}
         db_data = GraphFunctions.get_nodes_for_prevalence(session)
         harmonic_mean = power_mean(-1)
         for result in db_data:
             node_element, associated_leaves = result
-            leaves_prevalence = list(map(lambda n: n.properties.prevalence, associated_leaves))
-            id_prevalence[node_element.properties.identifier] = harmonic_mean(leaves_prevalence)
+            leaves_prevalence = list(map(lambda n: n['prevalence'], associated_leaves))
+            id_prevalence[node_element['identifier']] = harmonic_mean(leaves_prevalence)
         
         if set_in_db: GraphFunctions.db_set_prevalence(session, id_prevalence)
         return id_prevalence
@@ -183,7 +202,10 @@ RETURN node, collect(leaf)"""
         setting_query = ""
         counter = 0
         for k, v in id_prevalence.items():
-            setting_query += f"MATCH (n{counter} {{identifier: '{k}'}}) SET n{counter}.prevalence = {v} WITH n{counter}\n"
+            setting_query += f" WITH n{counter-1}\n"
+            setting_query += f"MATCH (n{counter} {{identifier: '{k}'}}) SET n{counter}.prevalence = {v}"
+            counter += 1
+        setting_query = setting_query[10:]
         session.run(setting_query)
 
 
@@ -208,6 +230,9 @@ RETURN node, collect(leaf)"""
         sn = list(map(lambda x : x[0], sn))
         return TSM([], vn, sn, ce, se)
     
+
+    ################# query for testing db TSM validity ###############
+
     @staticmethod
     def Db_Validity_query():
         return """OPTIONAL MATCH (n) WHERE NOT n:ValueNode AND NOT n:SpecificationNode WITH collect(n) = [] AS n_types
@@ -261,3 +286,11 @@ if __name__ == "__main__":
     elif args[1] == 'test':
         import test_.test_DbToTSM as test
         test.validate_db()
+    elif args[1] == 'prevalence':
+        URI = "bolt://localhost:7687"
+        AUTH = ("neo4j", "password")
+        DB_NAME = AUTH[0]
+        with GraphDatabase.driver(URI, auth=AUTH) as driver:
+            driver.verify_connectivity()
+            with driver.session(database = DB_NAME) as session:
+                GraphFunctions.prevalence(session, compute_with_occurence = False, set_leaves_occurences = False, set_in_db = True)
