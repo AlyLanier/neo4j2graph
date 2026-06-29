@@ -1,0 +1,40 @@
+node.AnnotationNode {
+  color: #F16667;
+  border_color: #F16667;
+  size: 25px;
+  caption: "{annotation}";
+}
+
+node.FileNode {
+  color: #4C8EDA;
+  size: 25px;
+  caption: "{filenames}";
+}
+
+node.SpecificationNode {
+  color: #8DCC93;
+  size: 25px;
+}
+
+node.ValueNode {
+  color: #de8620;
+  size: 25px;
+  caption: "{value}";
+}
+
+relationship.CONTAINS {
+  width: 1px;
+}
+
+relationship.IS_SPECIFIED_BY {
+  width: 1px;
+}
+
+relationship.COMBINED {
+  width: 1px;
+  caption: "{weight}";
+}
+
+relationship.ANNOTATES {
+  width: 1px;
+}
