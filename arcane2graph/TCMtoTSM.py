@@ -48,9 +48,13 @@ class VNode:
 
 class TSM:
 
-    def __init__(self, test_case_models = [], v_nodes = [], s_nodes = [], c_edges = [], s_edges = []):
+    def __init__(self, test_case_models = [], v_nodes = [], s_nodes = [], c_edges = [], s_edges = [], annotations = {"filenames": {}, "nonexistent_nodes": {}, "optional_nodes": {}}):
         self.v_nodes, self.s_nodes, self.c_edges, self.s_edges = v_nodes, s_nodes, c_edges, s_edges
+        self.annotations = annotations
         for test_case in test_case_models:
+            print(test_case.get_annotations())
+            print(self.get_annotations())
+            print(f"test case ========================= {test_case.get_annotations()["filenames"]}")
             self.expand_tsm(test_case)
     
     ################### getters & list appends ###################
@@ -67,14 +71,15 @@ class TSM:
     def get_specification_nodes(self):
         return self.s_nodes
     
-    def add_specification_node(self, new_node):
+    def add_specification_node(self, new_node, v_id = None, v_parent_id = None):
+        if v_parent_id is not None and v_id is not None: self.process_optional_spec(new_node, v_id, v_parent_id)
         self.s_nodes.append(new_node)
 
     def get_containment_edges(self):
         return self.c_edges
     
-    def add_containment_edge(self, src, tgt):
-        self.c_edges.append(TSM.create_edge(src, tgt))
+    def add_containment_edge(self, src, tgt, index = None):
+        self.c_edges.append(TSM.create_edge(src, tgt, index))
     
     def get_specification_edges(self):
         return self.s_edges
@@ -82,12 +87,57 @@ class TSM:
     def add_specification_edge(self, src, tgt):
         self.s_edges.append(TSM.create_edge(src, tgt))
     
+    def get_annotations(self):
+        return self.annotations
+    
+    def add_annotation(self, annotation_type, key, value):
+        tsm_annotations = self.get_annotations()
+        if annotation_type not in tsm_annotations: raise Exception('wrong key') #TODO
+
+        if key in tsm_annotations[annotation_type]:
+            print('key in')
+            print(tsm_annotations[annotation_type][key])
+            print(value)
+            print("lllllllllllllllllllllllllllllllllll")
+            for name in value:
+                if name not in tsm_annotations[annotation_type][key]:
+                    self.annotations[annotation_type][key].append(name)
+        else:
+            print(key)
+            print('key not in')
+            self.annotations[annotation_type][key] = value
+        
+        print(self.get_annotations()[annotation_type])
 
     def get_containment_value_edges(self):
         return [edge for edge in self.get_containment_edges() if isinstance(edge.source(), VNode)]
     
     def get_containment_specification_edges(self):
         return [edge for edge in self.get_containment_edges() if isinstance(edge.source(), SNode)]
+    
+    def process_optional_spec(self, s_node, v_id, v_parent_identifier):
+        tcm_optional_nodes = self.tcm_annotations["nonexistent_nodes"]
+        for parent_v_id, names in tcm_optional_nodes.items():
+            if v_id == parent_v_id:
+                self.add_annotation("nonexistent_nodes", s_node.get_identifier(), tcm_optional_nodes[v_id])
+
+        tsm_optional_nodes = self.get_annotations()["nonexistent_nodes"]
+        parent_v_node = TCM.find_node(self.get_value_nodes(), lambda n: n.get_identifier() == v_parent_identifier)
+        if parent_v_node is None: return
+        parent_s_node = TCM.find_node_from_edge(self.get_specification_edges(), parent_v_node, True)
+        for parent_s_id, names in tsm_optional_nodes.items():
+            if parent_s_id == parent_s_node.get_identifier():
+                for name in names:
+                    if s_node.name() == name:
+                        self.add_annotation("optional_nodes", s_node.get_identifier(),  name) #TODO
+                        tsm_optional_nodes[parent_s_id].remove(name)
+                        if tsm_optional_nodes[parent_s_id] == []:
+                            del tsm_optional_nodes[parent_s_id]
+                        return
+        
+        if parent_s_node in self.previous_tsm_s_nodes:
+            print('yayyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy')
+            self.add_annotation("optional_nodes", s_node.get_identifier(),  s_node.name())
     
 
     ############### Create node or edge #######################
@@ -101,8 +151,8 @@ class TSM:
         return VNode(ident, value)
 
     @staticmethod
-    def create_edge(src, tgt):
-        return Edge(src, tgt)
+    def create_edge(src, tgt, index = None):
+        return Edge(src, tgt, index)
     
 
     ################ SPEC binary relation ##################
@@ -123,14 +173,19 @@ class TSM:
     ################ expand Test Suite Model with TCM #####################
 
     def expand_tsm(self, tcm):
+        self.previous_tsm_s_nodes = tuple(self.get_specification_nodes())
+        self.tcm_annotations = tcm.get_annotations()
         tcm_root = TCM.search_root(tcm.get_edges())
         self.process_option_value(tcm_root, *tcm.get_model())
+
+        root_id = tcm_root.get_identifier()
+        self.add_annotation("filenames", root_id, self.tcm_annotations["filenames"][root_id])
         return self
 
     def process_option_value(self, current_node, tcm_nodes, tcm_edges):
         v_nodes = self.get_value_nodes()
         for v_node in v_nodes:
-            if v_node.get_identifier() == current_node.get_identifier(): return
+            if v_node.get_identifier() == current_node.get_identifier(): return v_node
                 # in theory we could process the type of the current_node to update its specification, but if current_node has a value consistent
                 # with the nodes already in the tsm, no need to update the type for now
 
@@ -139,7 +194,7 @@ class TSM:
 
         tsm_mother_v_node, tsm_mother_s_node, tsm_s_node= None, None, None
         tcm_mother_node = TCM.find_node_from_edge(tcm_edges, current_node, from_source = False)
-        if tcm_mother_node   is not None: tsm_mother_v_node = TCM.find_node_from_hash(v_nodes, tcm_mother_node)
+        if tcm_mother_node   is not None: tsm_mother_v_node = TCM.find_node_from_hash(v_nodes, tcm_mother_node.get_identifier())
         if tsm_mother_v_node is not None: tsm_mother_s_node = self.spec(tsm_mother_v_node)
         if tsm_mother_s_node is not None: tsm_s_node = TCM.find_node(self.get_containment_specification_edges(), lambda edge : edge.source() == tsm_mother_s_node and edge.target().name() == current_node.name(), lambda edge : edge.target())
         
@@ -154,16 +209,16 @@ class TSM:
                     self.add_specification_node(new_s_node)
             else:
                 new_s_node = TSM.create_s_node(*current_node.get_s_node_creation_info())
-                self.add_specification_node(new_s_node)
+                self.add_specification_node(new_s_node, new_v_node.get_identifier(), tsm_mother_v_node.get_identifier())
                 self.add_containment_edge(tsm_mother_s_node, new_s_node)
 
             self.add_specification_edge(new_v_node, new_s_node)
         
-        current_node_children = TCM.find_children(current_node, tcm_edges)
-        for current_node_child in current_node_children:
-            self.process_option_value(current_node_child, tcm_nodes, tcm_edges)
-            tsm_v_node_child = TCM.find_node_from_hash(v_nodes, current_node_child)
-            self.add_containment_edge(new_v_node, tsm_v_node_child)
+        edges_from_new_v_node = TCM.find_edges(tcm_edges, from_node=current_node)
+        for current_node_edge in edges_from_new_v_node:
+            tsm_v_node_child = self.process_option_value(current_node_edge.target(), tcm_nodes, tcm_edges)
+            self.add_containment_edge(new_v_node, tsm_v_node_child, current_node_edge.index()) #TODO plante
+        return new_v_node
     
     def process_type(self, tsm_v_node, tsm_s_node):
         if tsm_s_node.stype() in NODE_COMPOSITE_TYPES: return 
@@ -191,17 +246,17 @@ class TSM:
 
 def main():
     json_path = "arc_json"
+    #jsons_to_process = ['Mahyco_0x5b67d7517e00.json', 'Mahyco_0x5be0ee5cb7b0.json'] #TODO passe pas sur les nulls parce que les nodes avec null sont exactement les mêmes
+    jsons_to_process = ['Mahyco_0x5b67d7517e00.json', 'Mahyco_0x5aa3a2f6d0f0.json', 'Mahyco_0x5be0ee5cb7b0.json']
     processed_json = []
-    for filename in os.listdir(json_path):
-        if filename.endswith(".json"):
-            file_path = os.path.join(json_path, filename)
-            print(file_path)
-            test = TCM(file_path, 'mahyco')
-            processed_json.append(test)
-            if len(processed_json) >= 2:
-                break
+    for filename in jsons_to_process:
+        file_path = os.path.join(json_path, filename)
+        print(file_path)
+        test = TCM(file_path, 'mahyco')
+        processed_json.append(test)
     
     test_tsm = TSM(processed_json)
+    print(test_tsm.get_annotations())
 
 if __name__ == "__main__":
     args = sys.argv

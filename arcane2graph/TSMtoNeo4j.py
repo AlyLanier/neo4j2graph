@@ -21,20 +21,39 @@ def s_node_creation_query(node):
 def edge_creation_query(edge, relation):
     return f"CREATE ({STARTING_CHAR}{edge.source().get_identifier()})-[{relation}]->({STARTING_CHAR}{edge.target().get_identifier()})"
 
+def file_annotation_creation_query(node_id, file_names):
+    return f"CREATE (:FileNode:AnnotationNode {{filenames: {file_names}, annotation: null}})-[:ANNOTATES]->({STARTING_CHAR}{node_id})"
+
+def optional_node_annotation_creation_query(s_node_id):
+    return f"CREATE (cannotationnode)-[:ANNOTATES]->({STARTING_CHAR}{s_node_id})"
+
+def nonexistant_node_creation_query(parent_id, name):
+    return f"CREATE (cannotationnode)-[:ANNOTATES]->(:SpecificationNode {{name: '{name}', type: 'bool'}})<-[:CONTAINS]-({STARTING_CHAR}{parent_id})"
+
 def TSM_creation_query(tsm):
     query = ""
 
-    for node in tsm.get_value_nodes():
-        query += v_node_creation_query(node) + "\n"
+    for node in tsm.get_value_nodes():          query += v_node_creation_query(node) + "\n"
+    for node in tsm.get_specification_nodes():  query += s_node_creation_query(node) + "\n"
+    for edge in tsm.get_containment_edges():    query += edge_creation_query(edge, ":CONTAINS") + "\n"
+    for edge in tsm.get_specification_edges():  query += edge_creation_query(edge, ":IS_SPECIFIED_BY") + "\n"
     
-    for node in tsm.get_specification_nodes():
-        query += s_node_creation_query(node) + "\n"
-    
-    for edge in tsm.get_containment_edges():
-        query += edge_creation_query(edge, ":CONTAINS") + "\n"
-    
-    for edge in tsm.get_specification_edges():
-        query += edge_creation_query(edge, ":IS_SPECIFIED_BY") + "\n"
+    nb_optional_nodes = len(tsm.get_annotations()["optional_nodes"]) + len(tsm.get_annotations()["nonexistent_nodes"])
+    if nb_optional_nodes == 1:      query += "CREATE (cannotationnode:AnnotationNode {annotation: 'This value is optional'})"
+    elif nb_optional_nodes >= 2:    query += "CREATE (cannotationnode:AnnotationNode {annotation: 'These values are optional'})"
+
+    for key, annotation in tsm.get_annotations().items():
+        match key:
+            case "filenames":
+                for root_id, filenames in annotation.items():
+                    query += file_annotation_creation_query(root_id, filenames) + "\n"
+            case "optional_nodes":
+                for spec_node_id, _ in annotation.items():
+                    query += optional_node_annotation_creation_query(spec_node_id) + "\n"
+            case "nonexistent_nodes":
+                for parent_id, name in annotation.items():
+                    for option_name in name:
+                        query += nonexistant_node_creation_query(parent_id, option_name) + '\n'
     
     return query[:-1]
 
@@ -51,7 +70,7 @@ def build_tsm(files):
     return TSM(processed_json)
 
 def main():
-    test_tsm = build_tsm(['Mahyco_0x5b67d7517e00.json', 'Mahyco_0x5be0ee5cb7b0.json'])
+    test_tsm = build_tsm(['Mahyco_0x5b67d7517e00.json', 'Mahyco_0x5aa3a2f6d0f0.json', 'Mahyco_0x5be0ee5cb7b0.json'])
     #test_tsm = build_tsm(['Mahyco_0x5be0ee5cb7b0.json'])
     #test_tsm = build_tsm(['Mahyco_0x5b67d7517e00.json'])
     string_for_neo4j = TSM_creation_query(test_tsm)
@@ -61,12 +80,9 @@ def main():
 
     with GraphDatabase.driver(URI, auth=AUTH) as driver:
         driver.verify_connectivity()
-        # remove current graph
-        driver.execute_query("MATCH (p)\nDETACH DELETE p")
+        driver.execute_query("MATCH (p)\nDETACH DELETE p")# remove current graph
         print("deleted previous db")
-
-        # build graph here
-        driver.execute_query(string_for_neo4j)
+        driver.execute_query(string_for_neo4j)# build graph here
 
 def main_populate():
     json_path = 'arc_json'

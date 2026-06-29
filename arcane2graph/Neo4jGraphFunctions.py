@@ -17,8 +17,8 @@ class GraphFunctions:
     @staticmethod
     def get_TSM_query():
         return """MATCH (o:ValueNode) WITH collect(o) AS vn
-MATCH (q:SpecificationNode) WITH vn, collect(q) AS sn
-MATCH pr = ()-[:CONTAINS]->() WITH vn, sn, collect(reduce(output = [], n IN nodes(pr) | output + n)) AS ce
+MATCH (q:SpecificationNode) WHERE (q)<-[:IS_SPECIFIED_BY]-() WITH vn, collect(q) AS sn
+MATCH pr = ()-[:CONTAINS]->(end) WHERE end:ValueNode OR (end)<-[:IS_SPECIFIED_BY]-() WITH vn, sn, collect(reduce(output = [], n IN nodes(pr) | output + n)) AS ce
 MATCH ps = ()-[:IS_SPECIFIED_BY]->() WITH vn, sn, ce, collect(reduce(output = [], n IN nodes(ps) | output + n)) as se
 RETURN vn, sn, ce, se
 """
@@ -78,7 +78,7 @@ END AS result"""
     def combinatorial_coverage_base_query(additional_conditions, with_auto_reference_on_lists):
         if with_auto_reference_on_lists: leaf_matching = "MATCH (root)-[:CONTAINS*]->(vn:ValueNode) WHERE NOT (vn)-[:CONTAINS]->()"
         else:                            leaf_matching = "MATCH (vn:ValueNode) WHERE (root)-[:CONTAINS*]->(vn) AND NOT (vn)-[:CONTAINS]->()"
-        return f"""MATCH (root:ValueNode) WHERE NOT (root)<--()
+        return f"""MATCH (root:ValueNode) WHERE NOT (root)<-[:CONTAINS]-()
 {leaf_matching}{additional_conditions}
 WITH collect(vn) AS coverage, root AS _
 UNWIND apoc.coll.combinations(coverage, 2) as node_couple
@@ -109,7 +109,7 @@ RETURN _1n, rel, _2n"""
 
     @staticmethod
     def TSM_Slicing_base_query(str_leaf_element_ids, str_leaf_property_ids, return_all_subgraphs):
-        root_condition = "" if return_all_subgraphs else " WHERE NOT (root) <-- ()"
+        root_condition = "" if return_all_subgraphs else " WHERE NOT (root) <-[:CONTAINS]- ()"
         return f"""WITH [{str_leaf_element_ids[1:-1]}] AS leafEID, [{str_leaf_property_ids[1:-1]}] AS leafPID
 WITH leafEID, leafPID, size(leafEID) + size(leafPID) AS len
 
@@ -129,7 +129,7 @@ RETURN Vv, Vs, Ec, Es"""
     
     @staticmethod
     def TSM_Slicing_for_cc_query(str_leaf_element_ids, str_leaf_property_ids, return_all_subgraphs):
-        root_condition = "" if return_all_subgraphs else " WHERE NOT (root) <-- ()"
+        root_condition = "" if return_all_subgraphs else " WHERE NOT (root) <-[:CONTAINS]- ()"
         return f"""WITH [{str_leaf_element_ids[1:-1]}] AS leafEID, [{str_leaf_property_ids[1:-1]}] AS leafPID
 WITH leafEID, leafPID, size(leafEID) + size(leafPID) AS len
 
@@ -162,7 +162,7 @@ WITH root"""
     def set_leaves_prevalence(session):
         query = """MATCH (leaf:ValueNode)-[:IS_SPECIFIED_BY]->(sleaf:SpecificationNode) WHERE NOT (leaf)-[:CONTAINS]->()
 SET sleaf.occurrence = 0 WITH leaf, sleaf
-MATCH (root:ValueNode) WHERE NOT (root) <-- ()
+MATCH (root:ValueNode) WHERE NOT (root) <-[:CONTAINS]- ()
 MATCH p = (root)-[:CONTAINS*]->(leaf) WITH collect(p) AS paths, leaf, sleaf
 CALL(paths, leaf){
   WITH size(paths) AS occurrence, leaf
@@ -176,25 +176,34 @@ SET leaf.prevalence = toFloat(leaf.occurrence)/sleaf.occurrence"""
         session.run(query)
 
 
-    @staticmethod #TODO do it with occurences and not computed leaf prevalence for more precision
-    def prevalence(session, compute_with_occurence = True, set_leaves_occurences = False, set_in_db = False):
-        if set_leaves_occurences: GraphFunctions.set_leaves_prevalence(session)
+    @staticmethod
+    def prevalence_without_optional_values(session, compute_with_occurrence = True, set_leaves_occurrences = False, set_in_db = False):
+        if set_leaves_occurrences: GraphFunctions.set_leaves_prevalence(session)
         id_prevalence = {}
-        db_data = GraphFunctions.get_nodes_for_prevalence(session)
-        harmonic_mean = power_mean(-1)
-        for result in db_data:
-            node_element, associated_leaves = result
-            leaves_prevalence = list(map(lambda n: n['prevalence'], associated_leaves))
-            id_prevalence[node_element['identifier']] = harmonic_mean(leaves_prevalence)
+        db_data = GraphFunctions.get_nodes_for_prevalence(session, compute_with_occurrence)
+        
+        if compute_with_occurrence:
+            harmonic_mean = power_mean_rationnal(-1)
+            for result in db_data:
+                node_element, associated_leaves = result
+                leaves_occurrence = list(map(lambda n: (n[0]['occurrence'], n[1]['occurrence']), associated_leaves))
+                id_prevalence[node_element['identifier']] = harmonic_mean(leaves_occurrence)
+        else:
+            harmonic_mean = power_mean(-1)
+            for result in db_data:
+                node_element, associated_leaves = result
+                leaves_prevalence = list(map(lambda n: n['prevalence'], associated_leaves))
+                id_prevalence[node_element['identifier']] = harmonic_mean(leaves_prevalence)
         
         if set_in_db: GraphFunctions.db_set_prevalence(session, id_prevalence)
         return id_prevalence
 
     @staticmethod
-    def get_nodes_for_prevalence(session):
-        query = """MATCH (node:ValueNode) WHERE (node)-[:CONTAINS]->()
-MATCH (leaf:ValueNode) WHERE NOT (leaf)-[:CONTAINS]->() AND (node)-[:CONTAINS*]->(leaf)
-RETURN node, collect(leaf)"""
+    def get_nodes_for_prevalence(session, compute_with_occurrence):
+        spec_node_option, ret_spec_node = ("-[:IS_SPECIFIED_BY]->(sleaf:SpecificationNode)", "collect([leaf, sleaf])") if compute_with_occurrence else ("", "collect(leaf)")
+        query = f"""MATCH (node:ValueNode) WHERE (node)-[:CONTAINS]->()
+MATCH (leaf:ValueNode){spec_node_option} WHERE NOT (leaf)-[:CONTAINS]->() AND (node)-[:CONTAINS*]->(leaf)
+RETURN node, {ret_spec_node}"""
         return session.run(query)
     
     @staticmethod
@@ -235,21 +244,24 @@ RETURN node, collect(leaf)"""
 
     @staticmethod
     def Db_Validity_query():
-        return """OPTIONAL MATCH (n) WHERE NOT n:ValueNode AND NOT n:SpecificationNode WITH collect(n) = [] AS n_types
-OPTIONAL MATCH p = (start:SpecificationNode)-[:CONTAINS]-(end:ValueNode) WITH collect(p) = [] AS e_contains, n_types
-OPTIONAL MATCH p = (start)-[:IS_SPECIFIED_BY]->(end) WHERE start:SpecificationNode OR end:ValueNode WITH collect(p) = [] as e_specifies, e_contains, n_types
-OPTIONAL MATCH (n:ValueNode) WHERE EXISTS{MATCH (m:ValueNode) WHERE m<>n AND m.identifier = n.identifier AND m.value = n.value} WITH collect(n) = [] AS duplicate, e_specifies, e_contains, n_types
-OPTIONAL MATCH (n:SpecificationNode) WHERE NOT (n)<-[:CONTAINS]-() WITH count(n) = 1 AS unique_root, duplicate, e_specifies, e_contains, n_types
-OPTIONAL MATCH (n) WHERE NOT (n)--() OR (n)--(n) WITH n IS NULL AS node_alone, unique_root, duplicate, e_specifies, e_contains, n_types
-OPTIONAL MATCH (n)-[:CONTAINS]->() WHERE (n:ValueNode AND n.value <> NULL) OR (n:SpecificationNode AND NOT n.type IN ['dict', 'list']) WITH n IS NULL AS node_structure, node_alone, unique_root, duplicate, e_specifies, e_contains, n_types
-OPTIONAL MATCH (m)<-[:IS_SPECIFIED_BY]-(n:ValueNode)-[:IS_SPECIFIED_BY]->(o) WITH n IS NULL as unique_spec, node_structure, node_alone, unique_root, duplicate, e_specifies, e_contains, n_types
-OPTIONAL MATCH (m)-[:CONTAINS]->(n:SpecificationNode)<-[:CONTAINS]-(o) WITH n IS NULL as unique_s_parent, unique_spec, node_structure, node_alone, unique_root, duplicate, e_specifies, e_contains, n_types
-OPTIONAL MATCH (n:ValueNode)-[:IS_SPECIFIED_BY]->(s:SpecificationNode) WHERE (s.type IN ['dict', 'list'] AND NOT n.value IS :: NULL) OR (s.type = 'bool' AND NOT n.value IS :: BOOLEAN) or (s.type = 'int' AND NOT n.value IS :: INTEGER) or (s.type = 'float' AND NOT n.value IS :: FLOAT) or (s.type = 'str' AND NOT n.value IS :: STRING) WITH n IS NULL as type_spec, unique_s_parent, unique_spec, node_structure, node_alone, unique_root, duplicate, e_specifies, e_contains, n_types
-OPTIONAL MATCH (msn:SpecificationNode)<-[:IS_SPECIFIED_BY]-(mvn:ValueNode)-[:CONTAINS]->(vn:ValueNode)-[:IS_SPECIFIED_BY]->(sn:SpecificationNode)<-[:CONTAINS]-(msn) WITH count(DISTINCT vn) AS prop_5, type_spec, unique_s_parent, unique_spec, node_structure, node_alone, unique_root, duplicate, e_specifies, e_contains, n_types
-MATCH (root:ValueNode) WHERE NOT (root)<--() WITH count(root) as nb_root, prop_5, type_spec, unique_s_parent, unique_spec, node_structure, node_alone, unique_root, duplicate, e_specifies, e_contains, n_types
-MATCH (n:ValueNode) WITH count(n) AS nb_node, nb_root, prop_5, type_spec, unique_s_parent, unique_spec, node_structure, node_alone, unique_root, duplicate, e_specifies, e_contains, n_types
-OPTIONAL MATCH (n)-[]->(m), cyclePath=shortestPath((m)-[*]->(n)) WITH cyclePath IS NULL as is_cycle, prop_5 = nb_node-nb_root AS spec_child_id_child_spec, type_spec, unique_s_parent, unique_spec, node_structure, node_alone, unique_root, duplicate, e_specifies, e_contains, n_types
-return all(elmnt in [is_cycle, spec_child_id_child_spec, type_spec, unique_s_parent, unique_spec, node_structure, node_alone, unique_root, duplicate, e_specifies, e_contains, n_types] WHERE elmnt = TRUE) as is_db_valid"""
+        return """OPTIONAL MATCH (n) WHERE NOT n:ValueNode AND NOT n:SpecificationNode AND NOT n:AnnotationNode AND NOT n:FileNode WITH collect(n) = [] AS n_types
+OPTIONAL MATCH (s:SpecificationNode) WHERE NOT (s)<-[:IS_SPECIFIED_BY]-(:ValueNode) AND NOT (s)<-[:ANNOTATES]-(:AnnotationNode) WITH s IS NULL AS value_for_spec, n_types
+OPTIONAL MATCH p = (f:FileNode)-[:ANNOTATES]->(n) WHERE NOT n:ValueNode OR (n:ValueNode)<-[:CONTAINS]-() WITH collect(p) = [] AS file_annotation, value_for_spec, n_types
+OPTIONAL MATCH p = (a:AnnotationNode)-[:ANNOTATES]->(n) WHERE NOT a:FileNode AND NOT n:SpecificationNode WITH collect(p) = [] AS option_annotation, file_annotation, value_for_spec, n_types
+OPTIONAL MATCH p = (start:SpecificationNode)-[:CONTAINS]-(end:ValueNode) WITH collect(p) = [] AS e_contains, option_annotation, file_annotation, value_for_spec, n_types
+OPTIONAL MATCH p = (start)-[:IS_SPECIFIED_BY]->(end) WHERE start:SpecificationNode OR end:ValueNode WITH collect(p) = [] as e_specifies, e_contains, option_annotation, file_annotation, value_for_spec, n_types
+OPTIONAL MATCH (n:ValueNode) WHERE EXISTS{MATCH (m:ValueNode) WHERE m<>n AND m.identifier = n.identifier AND m.value = n.value} WITH collect(n) = [] AS duplicate, e_specifies, e_contains, option_annotation, file_annotation, value_for_spec, n_types
+OPTIONAL MATCH (n:SpecificationNode) WHERE NOT (n)<-[:CONTAINS]-() WITH count(n) = 1 AS unique_root, duplicate, e_specifies, e_contains, option_annotation, file_annotation, value_for_spec, n_types
+OPTIONAL MATCH (n) WHERE NOT (n)--() OR (n)--(n) WITH n IS NULL AS node_alone, unique_root, duplicate, e_specifies, e_contains, option_annotation, file_annotation, value_for_spec, n_types
+OPTIONAL MATCH (n)-[:CONTAINS]->() WHERE (n:ValueNode AND n.value <> NULL) OR (n:SpecificationNode AND NOT n.type IN ['dict', 'list']) WITH n IS NULL AS node_structure, node_alone, unique_root, duplicate, e_specifies, e_contains, option_annotation, file_annotation, value_for_spec, n_types
+OPTIONAL MATCH (m)<-[:IS_SPECIFIED_BY]-(n:ValueNode)-[:IS_SPECIFIED_BY]->(o) WITH n IS NULL as unique_spec, node_structure, node_alone, unique_root, duplicate, e_specifies, e_contains, option_annotation, file_annotation, value_for_spec, n_types
+OPTIONAL MATCH (m)-[:CONTAINS]->(n:SpecificationNode)<-[:CONTAINS]-(o) WITH n IS NULL as unique_s_parent, unique_spec, node_structure, node_alone, unique_root, duplicate, e_specifies, e_contains, option_annotation, file_annotation, value_for_spec, n_types
+OPTIONAL MATCH (n:ValueNode)-[:IS_SPECIFIED_BY]->(s:SpecificationNode) WHERE (s.type IN ['dict', 'list'] AND NOT n.value IS :: NULL) OR (s.type = 'bool' AND NOT n.value IS :: BOOLEAN) or (s.type = 'int' AND NOT n.value IS :: INTEGER) or (s.type = 'float' AND NOT n.value IS :: FLOAT) or (s.type = 'str' AND NOT n.value IS :: STRING) WITH n IS NULL as type_spec, unique_s_parent, unique_spec, node_structure, node_alone, unique_root, duplicate, e_specifies, e_contains, option_annotation, file_annotation, value_for_spec, n_types
+OPTIONAL MATCH (msn:SpecificationNode)<-[:IS_SPECIFIED_BY]-(mvn:ValueNode)-[:CONTAINS]->(vn:ValueNode)-[:IS_SPECIFIED_BY]->(sn:SpecificationNode)<-[:CONTAINS]-(msn) WITH count(DISTINCT vn) AS prop_5, type_spec, unique_s_parent, unique_spec, node_structure, node_alone, unique_root, duplicate, e_specifies, e_contains, option_annotation, file_annotation, value_for_spec, n_types
+MATCH (root:ValueNode) WHERE NOT (root)<-[:CONTAINS]-() WITH count(root) as nb_root, prop_5, type_spec, unique_s_parent, unique_spec, node_structure, node_alone, unique_root, duplicate, e_specifies, e_contains, option_annotation, file_annotation, value_for_spec, n_types
+MATCH (n:ValueNode) WITH count(n) AS nb_node, nb_root, prop_5, type_spec, unique_s_parent, unique_spec, node_structure, node_alone, unique_root, duplicate, e_specifies, e_contains, option_annotation, file_annotation, value_for_spec, n_types
+OPTIONAL MATCH (n)-[]->(m), cyclePath=shortestPath((m)-[*]->(n)) WITH cyclePath IS NULL as is_cycle, prop_5 = nb_node-nb_root AS spec_child_id_child_spec, type_spec, unique_s_parent, unique_spec, node_structure, node_alone, unique_root, duplicate, e_specifies, e_contains, option_annotation, file_annotation, value_for_spec, n_types
+return all(elmnt in [is_cycle, spec_child_id_child_spec, type_spec, unique_s_parent, unique_spec, node_structure, node_alone, unique_root, duplicate, e_specifies, e_contains, option_annotation, file_annotation, value_for_spec, n_types] WHERE elmnt = TRUE) as is_db_valid"""
 
 
 
@@ -293,4 +305,4 @@ if __name__ == "__main__":
         with GraphDatabase.driver(URI, auth=AUTH) as driver:
             driver.verify_connectivity()
             with driver.session(database = DB_NAME) as session:
-                GraphFunctions.prevalence(session, compute_with_occurence = False, set_leaves_occurences = False, set_in_db = True)
+                GraphFunctions.prevalence_without_optional_values(session, compute_with_occurrence = True, set_leaves_occurrences = True, set_in_db = True)

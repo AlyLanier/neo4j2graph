@@ -80,11 +80,10 @@ class Node:
 
 
 class Edge:
-    def __init__(self, source, target):
-        assert source != target
-        assert source is not None and target is not None
+    def __init__(self, source, target, index = None):
         self.src = source
         self.tgt = target
+        self.index = index
     
     def __repr__(self):
         return f"E({self.source()} -> {self.target()})"
@@ -97,12 +96,18 @@ class Edge:
 
     def target(self):
         return self.tgt
+    
+    def get_index(self):
+        return self.index
+
 
 class TCM:
 
-    def __init__(self, file_path, data_key):
+    def __init__(self, file_path, data_key = None):
+        self.annotations = {"filenames": {}, "nonexistent_nodes": {}}
         self.nodes, self.edges = self.json_to_tcm(file_path, data_key)
-        
+        self.add_annotation("filenames", self.search_root(self.get_edges()).get_identifier(), file_path)
+        self.process_nonexistent_nodes_annotation()
     
 
     ################# Loading data from json file #################
@@ -117,8 +122,8 @@ class TCM:
     
     @staticmethod
     def find_real_data(data, key):
-        if key in data:
-            return data[key]
+        if key is None: return data
+        if key in data: return data[key]
         else:
             for values in data.values():
                 if isinstance(values, dict):
@@ -144,8 +149,8 @@ class TCM:
         mother_node.set_type(list if data_type == "list" else dict)
 
         signature_items = []
-        for k, v in generator:
-            sig = self.process_node(k, v, mother_node, nodes, edges, f"{current_path}.{k}")
+        for i, (k, v) in enumerate(generator):
+            sig = self.process_node(k, v, mother_node, nodes, edges, f"{current_path}.{k}", i)
             if sig: signature_items.append(sig)
         
         if signature_items == []: return None
@@ -154,7 +159,7 @@ class TCM:
         return signature
 
 
-    def process_node(self, k, v, mother_node, nodes, edges, current_path, _stype = None):
+    def process_node(self, k, v, mother_node, nodes, edges, current_path, list_index):
         if isinstance(v, NODE_SIMPLE_TYPES):
             casted_value = TCM.value_cast(v)
             new_node = self.create_node(k, casted_value, current_path)
@@ -163,12 +168,15 @@ class TCM:
         elif v is not None:
             new_node = self.create_node(k, None, current_path)
             signature = self.nodify_rec(v, new_node, nodes, edges, current_path)
-            if signature is None: return None
+            if signature is None:
+                self.add_annotation("nonexistent_nodes", mother_node, k)
+                return None
         else:
+            self.add_annotation("nonexistent_nodes", mother_node, k)
             return None
 
         nodes.append(new_node)
-        edges.append(self.create_edge(mother_node, new_node))
+        edges.append(self.create_edge(mother_node, new_node, list_index if isinstance(v, list) else None))
         
         return signature
     
@@ -217,15 +225,25 @@ class TCM:
     def create_node(self, label, value, path, stype=None):
         return Node(label, value, path, stype)
     
-    def create_edge(self, source, target):
-        return Edge(source, target)
+    def create_edge(self, source, target, index = None):
+        return Edge(source, target, index)
+    
+    def get_annotations(self, annotation_type = "all"):
+        if annotation_type == "all":
+            return self.annotations
+        else:
+            return self.annotations[annotation_type]
+    
+    def add_annotation(self, annotation_type, k, v):
+        if k in self.annotations[annotation_type]:  self.annotations[annotation_type][k].append(v)
+        else:                                       self.annotations[annotation_type][k] = [v]
 
 
     ################ node/edge finder #############################
 
     @staticmethod
-    def find_node_from_hash(node_list, node_to_match):
-        condition = lambda node : node.get_identifier() == node_to_match.get_identifier()
+    def find_node_from_hash(node_list, hash):
+        condition = lambda node : node.get_identifier() == hash
         return TCM.find_node(node_list, condition, lambda x : x)
 
     @staticmethod
@@ -273,7 +291,7 @@ class TCM:
     def show_tcm_rec(self, return_string, current_node, current_alinea, alinea_length):
         return_string += f"{current_node}\n"
 
-        nodes, edges = self.get_model()
+        _, edges = self.get_model()
         children = [x.target() for x in edges if x.source() == current_node]
         if children == [] : return return_string
 
@@ -326,6 +344,20 @@ class TCM:
                 
                 for node in nodes:
                     node.cast(best_type)
+    
+
+    ################# process annotations ##################
+
+    def process_nonexistent_nodes_annotation(self):
+        annotations_to_add, annotations_to_del = [], []
+        for ne_parent_node, ne_names in self.get_annotations("nonexistent_nodes").items():
+            for ne_name in ne_names:
+                annotations_to_add.append(("nonexistent_nodes", ne_parent_node.get_identifier(), ne_name))
+            annotations_to_del.append(ne_parent_node)
+        for annotation in annotations_to_add:
+            self.add_annotation(*annotation)
+        for annotation in annotations_to_del:
+            del self.get_annotations("nonexistent_nodes")[annotation]
         
 
 
@@ -345,6 +377,7 @@ def main():
     max_show = 2
     for tcm in processed_json[:max_show]:
         tcm.show_tcm()
+        print(tcm.get_annotations())
             
 
 

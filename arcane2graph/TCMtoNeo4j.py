@@ -16,7 +16,7 @@ class TCMtoDB:
     @staticmethod
     def expand_neo4j_tsm(driver, db, tcm):
         tcm.unify_types() # needed for type consistency
-        TCMtoDB.final_queries = {"node_creation" : [], "node_matching" : {}, "edge_creation" : [], "type_change" : {}}
+        TCMtoDB.final_queries = {"node_creation" : [], "node_matching" : {}, "edge_creation" : [], "type_change" : {}, "file_annotation": tcm.get_file_annotation()}
         TCMtoDB.path_of_s_nodes_to_create = []
         TCMtoDB.db_existing_nodes = []
         with driver.session(database = db) as session:
@@ -84,8 +84,6 @@ class TCMtoDB:
         query = query[:-2]
 
         query_results = list(session.run(query).single())
-        if all(query_results):
-            raise Exception("TCM already is in db")
         return list(compress(identifiers, query_results))
 
     @staticmethod
@@ -134,7 +132,7 @@ FOREACH(n IN value_nodes | SET n.value = {cast_method})"""
         elif cast_into == float:
             return f"toFloat({obj})"
         elif cast_into == str:
-            return f"'{obj}'"
+            return f"toString({obj})"
     
             
 
@@ -185,9 +183,10 @@ FOREACH(n IN value_nodes | SET n.value = {cast_method})"""
     
     @staticmethod
     def process_final_queries(session):
-        TCMtoDB.process_node_creation_query(session)
-        TCMtoDB.process_type_change(session)
-        TCMtoDB.process_edge_creation_queries(session)
+        if TCMtoDB.final_queries["node_creation"] != []:    TCMtoDB.process_node_creation_query(session)
+        TCMtoDB.process_file_annotation(session)
+        if TCMtoDB.final_queries["type_change"] != {}:      TCMtoDB.process_type_change(session)
+        if TCMtoDB.final_queries["edge_creation"] != []:    TCMtoDB.process_edge_creation_queries(session)
     
     @staticmethod
     def process_node_creation_query(session):
@@ -253,6 +252,18 @@ FOREACH(n IN value_nodes | SET n.value = {cast_method})"""
         for (mother_id, child_id, relation) in edges_to_create:
             query += f"CREATE (e{id_token[mother_id]})-[:{relation}]->(e{id_token[child_id]})\n  "
         return query[:-3]
+
+    @staticmethod
+    def process_file_annotation(session):
+        for node_id, filename in TCMtoDB.final_queries["file_annotation"].items(): #only one key:value for now TODO annote null spec as optional
+            if TCMtoDB.final_queries["node_creation"] == []: # annotation node exists
+                query = f"""MATCH (n:ValueNode {{identifier: '{node_id}'}})<-[:ANNOTATES]-(an:FileNode)
+SET an.filenames = an.filenames + '{filename}'"""
+                print(query)
+            else: # annotation node does not exist
+                query = f"""MATCH (n:ValueNode {{identifier: '{node_id}'}})
+CREATE (n)<-[:ANNOTATES]-(:AnnotationNode:FileNode {{filenames: ['{filename}'], annotation: null}})"""
+            session.run(query)
 
 
 
