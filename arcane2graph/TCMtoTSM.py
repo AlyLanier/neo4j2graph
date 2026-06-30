@@ -52,9 +52,6 @@ class TSM:
         self.v_nodes, self.s_nodes, self.c_edges, self.s_edges = v_nodes, s_nodes, c_edges, s_edges
         self.annotations = annotations
         for test_case in test_case_models:
-            print(test_case.get_annotations())
-            print(self.get_annotations())
-            print(f"test case ========================= {test_case.get_annotations()["filenames"]}")
             self.expand_tsm(test_case)
     
     ################### getters & list appends ###################
@@ -95,19 +92,11 @@ class TSM:
         if annotation_type not in tsm_annotations: raise Exception('wrong key') #TODO
 
         if key in tsm_annotations[annotation_type]:
-            print('key in')
-            print(tsm_annotations[annotation_type][key])
-            print(value)
-            print("lllllllllllllllllllllllllllllllllll")
             for name in value:
                 if name not in tsm_annotations[annotation_type][key]:
                     self.annotations[annotation_type][key].append(name)
         else:
-            print(key)
-            print('key not in')
             self.annotations[annotation_type][key] = value
-        
-        print(self.get_annotations()[annotation_type])
 
     def get_containment_value_edges(self):
         return [edge for edge in self.get_containment_edges() if isinstance(edge.source(), VNode)]
@@ -129,7 +118,7 @@ class TSM:
             if parent_s_id == parent_s_node.get_identifier():
                 for name in names:
                     if s_node.name() == name:
-                        self.add_annotation("optional_nodes", s_node.get_identifier(),  name) #TODO
+                        self.add_annotation("optional_nodes", s_node.get_identifier(), name) #TODO if boundary condition in first TCM, does not put it in optional nodes later
                         tsm_optional_nodes[parent_s_id].remove(name)
                         if tsm_optional_nodes[parent_s_id] == []:
                             del tsm_optional_nodes[parent_s_id]
@@ -180,7 +169,7 @@ class TSM:
 
         root_id = tcm_root.get_identifier()
         self.add_annotation("filenames", root_id, self.tcm_annotations["filenames"][root_id])
-        return self
+        print(self.get_annotations())
 
     def process_option_value(self, current_node, tcm_nodes, tcm_edges):
         v_nodes = self.get_value_nodes()
@@ -217,7 +206,7 @@ class TSM:
         edges_from_new_v_node = TCM.find_edges(tcm_edges, from_node=current_node)
         for current_node_edge in edges_from_new_v_node:
             tsm_v_node_child = self.process_option_value(current_node_edge.target(), tcm_nodes, tcm_edges)
-            self.add_containment_edge(new_v_node, tsm_v_node_child, current_node_edge.index()) #TODO plante
+            self.add_containment_edge(new_v_node, tsm_v_node_child, current_node_edge.get_index())
         return new_v_node
     
     def process_type(self, tsm_v_node, tsm_s_node):
@@ -226,7 +215,7 @@ class TSM:
         tsm_s_nodetype = tsm_s_node.stype()
         if tsm_s_nodetype == tsm_new_v_type: return
         
-        #check types and print warning if not correct
+        #check types
         if TYPES[tsm_s_nodetype] < TYPES[tsm_new_v_type]:
             tsm_s_node.set_stype(tsm_new_v_type)
             self.update_value_nodes_types(tsm_s_node)
@@ -256,7 +245,6 @@ def main():
         processed_json.append(test)
     
     test_tsm = TSM(processed_json)
-    print(test_tsm.get_annotations())
 
 if __name__ == "__main__":
     args = sys.argv
