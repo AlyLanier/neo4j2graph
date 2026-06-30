@@ -19,7 +19,8 @@ def s_node_creation_query(node):
     return f"CREATE ({STARTING_CHAR}{node.get_identifier()}:SpecificationNode {{name: {sanitize(node.name())}, type: {sanitize(node.stype_name())}}})"
 
 def edge_creation_query(edge, relation):
-    return f"CREATE ({STARTING_CHAR}{edge.source().get_identifier()})-[{relation}]->({STARTING_CHAR}{edge.target().get_identifier()})"
+    list_index = f" {{listIndex: {edge.get_index()}}}" if edge.get_index() is not None else ""
+    return f"CREATE ({STARTING_CHAR}{edge.source().get_identifier()})-[{relation}{list_index}]->({STARTING_CHAR}{edge.target().get_identifier()})"
 
 def file_annotation_creation_query(node_id, file_names):
     return f"CREATE (:FileNode:AnnotationNode {{filenames: {file_names}, annotation: null}})-[:ANNOTATES]->({STARTING_CHAR}{node_id})"
@@ -39,8 +40,7 @@ def TSM_creation_query(tsm):
     for edge in tsm.get_specification_edges():  query += edge_creation_query(edge, ":IS_SPECIFIED_BY") + "\n"
     
     nb_optional_nodes = len(tsm.get_annotations()["optional_nodes"]) + len(tsm.get_annotations()["nonexistent_nodes"])
-    if nb_optional_nodes == 1:      query += "CREATE (cannotationnode:AnnotationNode {annotation: 'This value is optional'})"
-    elif nb_optional_nodes >= 2:    query += "CREATE (cannotationnode:AnnotationNode {annotation: 'These values are optional'})"
+    if nb_optional_nodes > 0: query += "CREATE (cannotationnode:AnnotationNode {annotation: 'This value is optional'})"
 
     for key, annotation in tsm.get_annotations().items():
         match key:

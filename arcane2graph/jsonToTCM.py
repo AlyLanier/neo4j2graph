@@ -176,7 +176,7 @@ class TCM:
             return None
 
         nodes.append(new_node)
-        edges.append(self.create_edge(mother_node, new_node, list_index if isinstance(v, list) else None))
+        edges.append(self.create_edge(mother_node, new_node, list_index if mother_node.get_type() == list else None))
         
         return signature
     
@@ -226,6 +226,7 @@ class TCM:
         return Node(label, value, path, stype)
     
     def create_edge(self, source, target, index = None):
+        if index is not None: print(f"index = {index}, source : {source}, target : {target}")
         return Edge(source, target, index)
     
     def get_annotations(self, annotation_type = "all"):
