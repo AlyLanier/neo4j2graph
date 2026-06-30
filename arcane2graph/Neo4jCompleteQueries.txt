@@ -1,3 +1,34 @@
+set occurrences without list ordering #TODO
+
+MATCH (sroot:SpecificationNode) WHERE NOT (sroot)<-[:CONTAINS]-()
+MATCH (v:ValueNode)-[:IS_SPECIFIED_BY]->(sroot) SET v.occurrence = 1 WITH collect(v) AS vn, sroot
+SET sroot.occurrence = size(vn) WITH sroot
+CALL(sroot){
+  MATCH (v:ValueNode)-[:IS_SPECIFIED_BY]->(s:SpecificationNode) WITH collect(v) AS vn, s
+  MATCH p = (sroot)-[:CONTAINS*]->(s) WITH vn, s, length(p) AS depth
+  RETURN vn, s, depth ORDER BY depth
+}
+
+CALL(vn, s){
+  WITH s as spec, vn as nodes, size(vn) AS nb_nodes
+  MATCH (spec)<-[:CONTAINS]-(mother_spec)
+  WITH mother_spec, spec, nodes, nb_nodes
+  CALL(*){
+    WHEN mother_spec.type = 'list'
+    THEN SET spec.occurrence = mother_spec.occurrence*nb_nodes RETURN 0 as x 
+    ELSE SET spec.occurrence = mother_spec.occurrence RETURN 1 as x
+  }
+  WITH nodes
+  UNWIND nodes as node
+  CALL(node){
+    MATCH (mother:ValueNode)-[:CONTAINS]->(node)
+    WITH reduce(occ = 0, m in collect(mother)| occ + m.occurrence) as occurrences
+    SET node.occurrence = occurrences
+  }
+}
+
+
+
 TSM_Slicing --> Combinatorial coverage
 
 WITH [] AS leafEID, ["5c9573292a0784c352a1c1d1cfac4242", "451c9c90e9fb8dde88ebc62a989144a8", "bf3e3b05381504e80404b2f86cfb43e7"] AS leafPID
@@ -17,9 +48,6 @@ CALL apoc.coll.elements(node_couple) YIELD _1n, _2n
 CALL apoc.create.vRelationship(_1n, 'COMBINED', {weight: weight}, _2n) YIELD rel
 RETURN _1n, rel, _2n, weight
 ORDER BY weight DESC
-
-
-
 
 
 TSM_Slicing Sets
