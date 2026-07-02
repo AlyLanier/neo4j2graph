@@ -76,7 +76,9 @@ class TSM:
         return self.c_edges
     
     def add_containment_edge(self, src, tgt, index = None):
-        self.c_edges.append(TSM.create_edge(src, tgt, index))
+        equal_edge = TCM.find_edges(self.get_containment_edges(), src, tgt)
+        if equal_edge == []:    self.c_edges.append(TSM.create_edge(src, tgt, index))
+        else:                   equal_edge[0].concat_index(index)
     
     def get_specification_edges(self):
         return self.s_edges
@@ -103,30 +105,6 @@ class TSM:
     
     def get_containment_specification_edges(self):
         return [edge for edge in self.get_containment_edges() if isinstance(edge.source(), SNode)]
-    
-    def process_optional_spec(self, s_node, v_id, v_parent_identifier):
-        tcm_optional_nodes = self.tcm_annotations["nonexistent_nodes"]
-        for parent_v_id, names in tcm_optional_nodes.items():
-            if v_id == parent_v_id:
-                self.add_annotation("nonexistent_nodes", s_node.get_identifier(), tcm_optional_nodes[v_id])
-
-        tsm_optional_nodes = self.get_annotations()["nonexistent_nodes"]
-        parent_v_node = TCM.find_node(self.get_value_nodes(), lambda n: n.get_identifier() == v_parent_identifier)
-        if parent_v_node is None: return
-        parent_s_node = TCM.find_node_from_edge(self.get_specification_edges(), parent_v_node, True)
-        for parent_s_id, names in tsm_optional_nodes.items():
-            if parent_s_id == parent_s_node.get_identifier():
-                for name in names:
-                    if s_node.name() == name:
-                        self.add_annotation("optional_nodes", s_node.get_identifier(), name) #TODO if boundary condition in first TCM, does not put it in optional nodes later
-                        tsm_optional_nodes[parent_s_id].remove(name)
-                        if tsm_optional_nodes[parent_s_id] == []:
-                            del tsm_optional_nodes[parent_s_id]
-                        return
-        
-        if parent_s_node in self.previous_tsm_s_nodes:
-            print('yayyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy')
-            self.add_annotation("optional_nodes", s_node.get_identifier(),  s_node.name())
     
 
     ############### Create node or edge #######################
@@ -169,6 +147,7 @@ class TSM:
 
         root_id = tcm_root.get_identifier()
         self.add_annotation("filenames", root_id, self.tcm_annotations["filenames"][root_id])
+        self.catch_missing_input(tcm)
         print(self.get_annotations())
 
     def process_option_value(self, current_node, tcm_nodes, tcm_edges):
@@ -230,6 +209,42 @@ class TSM:
             s_nodetype = s_node.stype()
             if type(v_node.val()) != s_nodetype:
                 v_node.cast(s_nodetype)
+    
+    def process_optional_spec(self, s_node, v_id, v_parent_identifier):
+        tcm_optional_nodes = self.tcm_annotations["nonexistent_nodes"]
+        for parent_v_id, names in tcm_optional_nodes.items():
+            if v_id == parent_v_id:
+                self.add_annotation("nonexistent_nodes", s_node.get_identifier(), tcm_optional_nodes[v_id])
+
+        tsm_optional_nodes = self.get_annotations()["nonexistent_nodes"]
+        parent_v_node = TCM.find_node(self.get_value_nodes(), lambda n: n.get_identifier() == v_parent_identifier)
+        if parent_v_node is None: return
+        parent_s_node = TCM.find_node_from_edge(self.get_specification_edges(), parent_v_node, True)
+        for parent_s_id, names in tsm_optional_nodes.items():
+            if parent_s_id == parent_s_node.get_identifier():
+                for name in names:
+                    if s_node.name() == name:
+                        self.add_annotation("optional_nodes", s_node.get_identifier(), name) #TODO if boundary condition in first TCM, does not put it in optional nodes later
+                        tsm_optional_nodes[parent_s_id].remove(name)
+                        if tsm_optional_nodes[parent_s_id] == []:
+                            del tsm_optional_nodes[parent_s_id]
+                        return
+        
+        if parent_s_node in self.previous_tsm_s_nodes:
+            print('yayyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy')
+            self.add_annotation("optional_nodes", s_node.get_identifier(),  s_node.name())
+    
+    def catch_missing_input(self, tcm):
+        specs_of_tcm = set()
+        for node in tcm.get_nodes():
+            vn = TCM.find_node_from_hash(self.get_value_nodes(), node.get_identifier())
+            sn = TCM.find_node_from_edge(self.get_specification_edges(), vn, from_source=True)
+            specs_of_tcm.add(sn)
+        for snode in self.get_specification_nodes():
+            msn = TCM.find_node_from_edge(self.get_containment_specification_edges(), snode, from_source=False)
+            if snode not in specs_of_tcm and msn in specs_of_tcm:
+                self.add_annotation("optional_nodes", snode.get_identifier(), snode.name())
+
     
 
 

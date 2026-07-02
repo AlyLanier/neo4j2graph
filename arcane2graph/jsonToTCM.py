@@ -83,7 +83,9 @@ class Edge:
     def __init__(self, source, target, index = None):
         self.src = source
         self.tgt = target
-        self.index = index
+        if isinstance(index, list):     self.index = index
+        elif isinstance(index, int):    self.index = [index]
+        else:                           self.index = None
     
     def __repr__(self):
         return f"E({self.source()} -> {self.target()})"
@@ -99,6 +101,10 @@ class Edge:
     
     def get_index(self):
         return self.index
+    
+    def concat_index(self, i):
+        for index in i:
+            if index not in self.get_index(): self.index.append(index)
 
 
 class TCM:
@@ -248,9 +254,9 @@ class TCM:
         return TCM.find_node(node_list, condition, lambda x : x)
 
     @staticmethod
-    def find_node_from_edge(edge_list, match_value, from_source):
-        if from_source: functions = (lambda edge : edge.source() == match_value), (lambda edge : edge.target())
-        else:           functions = (lambda edge : edge.target() == match_value), (lambda edge : edge.source())
+    def find_node_from_edge(edge_list, match_node, from_source):
+        if from_source: functions = (lambda edge : edge.source() == match_node), (lambda edge : edge.target())
+        else:           functions = (lambda edge : edge.target() == match_node), (lambda edge : edge.source())
 
         return TCM.find_node(edge_list, *functions)
 
