@@ -1,5 +1,6 @@
-set occurrences without list ordering #TODO
+set occurrences without list ordering
 
+MATCH (nonexistent:SpecificationNode) WHERE NOT (nonexistent)<-[:IS_SPECIFIED_BY]-(:ValueNode) SET nonexistent.occurrence = 0
 MATCH (sroot:SpecificationNode) WHERE NOT (sroot)<-[:CONTAINS]-()
 MATCH (v:ValueNode)-[:IS_SPECIFIED_BY]->(sroot) SET v.occurrence = 1 WITH collect(v) AS vn, sroot
 SET sroot.occurrence = size(vn) WITH sroot
@@ -10,20 +11,31 @@ CALL(sroot){
 }
 
 CALL(vn, s){
-  WITH s as spec, vn as nodes, size(vn) AS nb_nodes
-  MATCH (spec)<-[:CONTAINS]-(mother_spec)
-  WITH mother_spec, spec, nodes, nb_nodes
-  CALL(*){
-    WHEN mother_spec.type = 'list'
-    THEN SET spec.occurrence = mother_spec.occurrence*nb_nodes RETURN 0 as x 
-    ELSE SET spec.occurrence = mother_spec.occurrence RETURN 1 as x
+  MATCH (s)<-[:CONTAINS]-(mother_spec:SpecificationNode)
+  OPTIONAL MATCH (mother_spec)<-[:ANNOTATES]-(a:AnnotationNode {annotation: 'This value is optional'})
+  CALL(mother_spec, a){
+    WHEN a IS :: NULL
+    THEN RETURN mother_spec.occurrence as occ
+    ELSE{
+      MATCH (mother_spec)<-[:IS_SPECIFIED_BY]-(mother_value:ValueNode)
+      RETURN reduce(occu = 0, m in collect(mother_value)| occu + m.occurrence) as occ
+    }
   }
-  WITH nodes
-  UNWIND nodes as node
-  CALL(node){
-    MATCH (mother:ValueNode)-[:CONTAINS]->(node)
-    WITH reduce(occ = 0, m in collect(mother)| occ + m.occurrence) as occurrences
-    SET node.occurrence = occurrences
+  WITH mother_spec, s, vn, occ
+  CALL(mother_spec, s, occ){
+    WHEN mother_spec.type = 'dict'
+    THEN SET s.occurrence = occ
+    ELSE {
+      MATCH (mother_spec)<-[:IS_SPECIFIED_BY]-(mother_value:ValueNode)-[r:CONTAINS]->(:ValueNode) WITH max(r.listIndex) + 1 AS edge_max, occ, s
+      SET s.occurrence = occ*edge_max
+    }
+  }
+  WITH vn
+  UNWIND vn as vnode
+  CALL(vnode){
+    MATCH (mother:ValueNode)-[:CONTAINS]->(vnode)
+    WITH reduce(occu = 0, m in collect(mother)| occu + m.occurrence) as occurrences
+    SET vnode.occurrence = occurrences
   }
 }
 
