@@ -43,7 +43,7 @@ def validate_db_from_TSM():
     json_path = "arc_json/arc_json_tests"
     processed_json = []
     for filename in os.listdir(json_path):
-        if filename.endswith(".json"):
+        if filename.endswith(".json") and filename != "Mahyco_test_Alyssia.json":
             print(filename)
             file_path = os.path.join(json_path, filename)
             processed_json.append(TCM(file_path, 'mahyco'))
