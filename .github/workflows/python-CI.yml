@@ -13,7 +13,8 @@ jobs:
       with:
         python-version: '3.14'
     - name: Install Dependencies
-      run: pip install numpy
+      run: pip install numpy itertools
+      
 
     - name: MYTEST
       run: python3.14 arcane2graph/jsonToTCM.py test
