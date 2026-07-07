@@ -1,4 +1,4 @@
-set occurrences without list ordering
+TODO maybe do it by batch of same depth
 
 MATCH (nonexistent:SpecificationNode) WHERE NOT (nonexistent)<-[:IS_SPECIFIED_BY]-(:ValueNode) SET nonexistent.occurrence = 0
 MATCH (sroot:SpecificationNode) WHERE NOT (sroot)<-[:CONTAINS]-()
@@ -9,35 +9,59 @@ CALL(sroot){
   MATCH p = (sroot)-[:CONTAINS*]->(s) WITH vn, s, length(p) AS depth
   RETURN vn, s, depth ORDER BY depth
 }
-
+WITH vn, s
 CALL(vn, s){
   MATCH (s)<-[:CONTAINS]-(mother_spec:SpecificationNode)
-  OPTIONAL MATCH (mother_spec)<-[:ANNOTATES]-(a:AnnotationNode {annotation: 'This value is optional'})
-  CALL(mother_spec, a){
-    WHEN a IS :: NULL
-    THEN RETURN mother_spec.occurrence as occ
-    ELSE{
-      MATCH (mother_spec)<-[:IS_SPECIFIED_BY]-(mother_value:ValueNode)
-      RETURN reduce(occu = 0, m in collect(mother_value)| occu + m.occurrence) as occ
+  CALL(*){
+    OPTIONAL MATCH (mother_spec)<-[:ANNOTATES]-(a:AnnotationNode {annotation: 'This value is optional'})
+    CALL(mother_spec, a){
+      WHEN a IS :: NULL
+      THEN RETURN mother_spec.occurrence as occ
+      ELSE{
+        MATCH (mother_spec)<-[:IS_SPECIFIED_BY]-(mother_value:ValueNode)
+        RETURN reduce(occu = 0, m in collect(mother_value)| occu + m.occurrence) as occ
+      }
     }
+    SET s.occurrence = occ 
   }
-  WITH mother_spec, s, vn, occ
-  CALL(mother_spec, s, occ){
-    WHEN mother_spec.type = 'dict'
-    THEN SET s.occurrence = occ
-    ELSE {
-      MATCH (mother_spec)<-[:IS_SPECIFIED_BY]-(mother_value:ValueNode)-[r:CONTAINS]->(:ValueNode) WITH max(r.listIndex) + 1 AS edge_max, occ, s
-      SET s.occurrence = occ*edge_max
+  WITH vn, mother_spec
+  CALL(mother_spec){
+    OPTIONAL MATCH (mother_spec)<-[:IS_SPECIFIED_BY]-(:ValueNode)-[r:CONTAINS]->(:ValueNode) WITH collect(r.listIndex) as edges_index
+    CALL(edges_index){
+      WHEN edges_index = []
+      THEN RETURN -1 AS edge_max
+      ELSE {
+        UNWIND edges_index AS edge_index
+        UNWIND edge_index as index
+        RETURN max(index) AS edge_max
+      }
     }
+    RETURN edge_max
   }
-  WITH vn
+  WITH vn, edge_max
   UNWIND vn as vnode
-  CALL(vnode){
-    MATCH (mother:ValueNode)-[:CONTAINS]->(vnode)
-    WITH reduce(occu = 0, m in collect(mother)| occu + m.occurrence) as occurrences
-    SET vnode.occurrence = occurrences
+  CALL(vnode, edge_max){
+    WHEN edge_max = -1
+    THEN {
+      MATCH (mother:ValueNode)-[:CONTAINS]->(vnode)
+      WITH reduce(occu = 0, m in collect(mother)| occu + m.occurrence) as mothers_occ, vnode
+      SET vnode.occurrence = mothers_occ
+      # RETURN mothers_occ as test
+    }
+    ELSE{
+      WITH vnode
+      MATCH (mother:ValueNode)-[r:CONTAINS]->(vnode) WITH r.listIndex AS indexe, vnode, collect(mother) as mother
+      WITH indexe, vnode, reduce(occ = 0, m in mother|occ + m.occurrence) as occurrence_on_1_edge_index
+      let occ1edgeindex_positionned = [i in range(0, edge_max)|occurrence_on_1_edge_index*toInteger(i in indexe)]
+      with vnode, collect(occ1edgeindex_positionned) as all_occ_on_edges
+      SET vnode.occurrence_ordered = [i in range(0, edge_max)|reduce(acc = 0, j in range(0, size(all_occ_on_edges)-1)|acc + all_occ_on_edges[j][i])]
+      SET vnode.occurrence = reduce(acc = 0, m in vnode.occurrence_ordered|acc+m)
+      # RETURN vnode.occurrence_ordered as test
+    }
   }
+  # return vnode, test
 }
+# return vnode, s, test
 
 
 
