@@ -14,4 +14,4 @@ jobs:
         python-version: '3.14'
 
     - name: MYTEST
-      run: jsonToTCM.py test
+      run: python3.14 arcane2graph/jsonToTCM.py test
