@@ -60,17 +60,7 @@ axl2ccT4 -l json -o \[output_path\] \[path_to_axl\]/Mahyco.axl
 
 ## Docker deployment
 ```
-docker run \
-    -d \
-    -p 7474:7474 -p 7687:7687 \
-    -v $PWD/data:/data -v $PWD/plugins:/plugins \
-    --name neo4j-apoc \
-    -e NEO4J_apoc_export_file_enabled=true \
-    -e NEO4J_apoc_import_file_enabled=true \
-    -e NEO4J_apoc_import_file_use__neo4j__config=true \
-    -e NEO4J_PLUGINS=\[\"apoc\",\"apoc-extended\"\] \
-    -e NEO4J_AUTH=neo4j/password \
-    neo4j:5.26
+docker run -d -p 7474:7474 -p 7687:7687 -v $PWD/data:/data -v $PWD/plugins:/plugins --name neo4j-test -e NEO4J_apoc_export_file_enabled=true -e NEO4J_apoc_import_file_enabled=true -e NEO4J_apoc_import_file_use__neo4j__config=true -e NEO4J_PLUGINS=\[\"apoc\",\"apoc-extended\"\] -e NEO4J_AUTH=neo4j/password neo4j:latest
 ```
 
 ## Populating the database

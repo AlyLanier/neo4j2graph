@@ -1,0 +1,165 @@
+TODO maybe do it by batch of same depth
+
+MATCH (nonexistent:SpecificationNode) WHERE NOT (nonexistent)<-[:IS_SPECIFIED_BY]-(:ValueNode) SET nonexistent.occurrence = 0
+MATCH (sroot:SpecificationNode) WHERE NOT (sroot)<-[:CONTAINS]-()
+MATCH (v:ValueNode)-[:IS_SPECIFIED_BY]->(sroot) SET v.occurrence = 1 WITH collect(v) AS vn, sroot
+SET sroot.occurrence = size(vn) WITH sroot
+CALL(sroot){
+  MATCH (v:ValueNode)-[:IS_SPECIFIED_BY]->(s:SpecificationNode) WITH collect(v) AS vn, s
+  MATCH p = (sroot)-[:CONTAINS*]->(s) WITH vn, s, length(p) AS depth
+  RETURN vn, s, depth ORDER BY depth
+}
+WITH vn, s
+CALL(vn, s){
+  MATCH (s)<-[:CONTAINS]-(mother_spec:SpecificationNode)
+  CALL(*){
+    OPTIONAL MATCH (mother_spec)<-[:ANNOTATES]-(a:AnnotationNode {annotation: 'This value is optional'})
+    CALL(mother_spec, a){
+      WHEN a IS :: NULL
+      THEN RETURN mother_spec.occurrence as occ
+      ELSE{
+        MATCH (mother_spec)<-[:IS_SPECIFIED_BY]-(mother_value:ValueNode)
+        RETURN reduce(occu = 0, m in collect(mother_value)| occu + m.occurrence) as occ
+      }
+    }
+    SET s.occurrence = occ 
+  }
+  WITH vn, mother_spec
+  CALL(mother_spec){
+    OPTIONAL MATCH (mother_spec)<-[:IS_SPECIFIED_BY]-(:ValueNode)-[r:CONTAINS]->(:ValueNode) WITH collect(r.listIndex) as edges_index
+    CALL(edges_index){
+      WHEN edges_index = []
+      THEN RETURN -1 AS edge_max
+      ELSE {
+        UNWIND edges_index AS edge_index
+        UNWIND edge_index as index
+        RETURN max(index) AS edge_max
+      }
+    }
+    RETURN edge_max
+  }
+  WITH vn, edge_max
+  UNWIND vn as vnode
+  CALL(vnode, edge_max){
+    WHEN edge_max = -1
+    THEN {
+      MATCH (mother:ValueNode)-[:CONTAINS]->(vnode)
+      WITH reduce(occu = 0, m in collect(mother)| occu + m.occurrence) as mothers_occ, vnode
+      SET vnode.occurrence = mothers_occ
+      # RETURN mothers_occ as test
+    }
+    ELSE{
+      WITH vnode
+      MATCH (mother:ValueNode)-[r:CONTAINS]->(vnode) WITH r.listIndex AS indexe, vnode, collect(mother) as mother
+      WITH indexe, vnode, reduce(occ = 0, m in mother|occ + m.occurrence) as occurrence_on_1_edge_index
+      let occ1edgeindex_positionned = [i in range(0, edge_max)|occurrence_on_1_edge_index*toInteger(i in indexe)]
+      with vnode, collect(occ1edgeindex_positionned) as all_occ_on_edges
+      SET vnode.occurrence_ordered = [i in range(0, edge_max)|reduce(acc = 0, j in range(0, size(all_occ_on_edges)-1)|acc + all_occ_on_edges[j][i])]
+      SET vnode.occurrence = reduce(acc = 0, m in vnode.occurrence_ordered|acc+m)
+      # RETURN vnode.occurrence_ordered as test
+    }
+  }
+  # return vnode, test
+}
+# return vnode, s, test
+
+
+
+TSM_Slicing --> Combinatorial coverage
+
+WITH [] AS leafEID, ["5c9573292a0784c352a1c1d1cfac4242", "451c9c90e9fb8dde88ebc62a989144a8", "bf3e3b05381504e80404b2f86cfb43e7"] AS leafPID
+WITH leafEID, leafPID, size(leafEID) + size(leafPID) AS len
+
+MATCH (root:ValueNode) WHERE NOT (root) <-- ()
+MATCH (root)-[:CONTAINS*]->(leaf:ValueNode) WHERE NOT (leaf)-[:CONTAINS]->() AND (leaf.identifier IN leafPID OR elementId(leaf) IN leafEID)
+WITH size(collect(DISTINCT leaf)) AS sizes, root, len
+MATCH p = (root)-[*]->(n) WHERE sizes = len AND (EXISTS{ MATCH t = (root)-[*]->(n) WHERE t <> p })
+WITH root
+
+MATCH (root)-[:CONTAINS*]->(vn:ValueNode) WHERE NOT (vn)-[:CONTAINS]->() AND (vn.identifier IN ["5c9573292a0784c352a1c1d1cfac4242", "451c9c90e9fb8dde88ebc62a989144a8"] OR elementId(vn) IN ["4:ff0859ac-496c-403c-b1cb-8a0bb1eafbc9:236", "4:ff0859ac-496c-403c-b1cb-8a0bb1eafbc9:276", "4:ff0859ac-496c-403c-b1cb-8a0bb1eafbc9:285", "4:ff0859ac-496c-403c-b1cb-8a0bb1eafbc9:232", "4:ff0859ac-496c-403c-b1cb-8a0bb1eafbc9:229", "4:ff0859ac-496c-403c-b1cb-8a0bb1eafbc9:270", "4:ff0859ac-496c-403c-b1cb-8a0bb1eafbc9:245"])
+WITH collect(vn) AS root_coverage, elementId(root) AS _
+UNWIND apoc.coll.combinations(root_coverage, 2) as node_couple
+WITH node_couple, count(node_couple) AS weight
+CALL apoc.coll.elements(node_couple) YIELD _1n, _2n
+CALL apoc.create.vRelationship(_1n, 'COMBINED', {weight: weight}, _2n) YIELD rel
+RETURN _1n, rel, _2n, weight
+ORDER BY weight DESC
+
+
+TSM_Slicing Sets
+
+WITH [] AS leafEID, ["e85d871ca1c462779aaf1744b4af9166", "c4e69f57bd3f4f982e66ec0ef79b60b8", "85566b2d3a615411b3ace3e3a46b65f2", "81eee885f7aa37a349c0f48494b3f100"] AS leafPID
+WITH leafEID, leafPID, size(leafEID) + size(leafPID) AS len
+
+MATCH (root:ValueNode) #WHERE NOT (root) <-- ()
+MATCH (root)-[:CONTAINS*]->(leaf:ValueNode) WHERE NOT (leaf)-[:CONTAINS]->() AND (leaf.identifier IN leafPID OR elementId(leaf) IN leafEID)
+WITH size(collect(DISTINCT leaf)) AS sizes, root, len
+
+MATCH p = (root)-[*]->(n) WHERE sizes = len AND (EXISTS{ MATCH t = (root)-[*]->(n) WHERE t <> p })
+WITH p, root, nodes(p) AS Nodes, relationships(p) AS Relations
+
+MATCH (o:ValueNode) WHERE o in Nodes
+MATCH (q:SpecificationNode) WHERE q in Nodes
+MATCH pr = ()-[r:CONTAINS]->() WHERE r IN Relations
+MATCH ps = ()-[s:IS_SPECIFIED_BY]->() WHERE s IN Relations
+WITH collect(DISTINCT o) AS Vv, collect(DISTINCT q) AS Vs, collect(DISTINCT pr) AS Ec, collect(DISTINCT ps) AS Es, root
+RETURN Vv, Vs, Ec, Es
+
+
+TSM_Slicing simple
+
+WITH [] AS leafEID, ["5c9573292a0784c352a1c1d1cfac4242", "451c9c90e9fb8dde88ebc62a989144a8", "bf3e3b05381504e80404b2f86cfb43e7"] AS leafPID
+WITH leafEID, leafPID, size(leafEID) + size(leafPID) AS len
+
+MATCH (root:ValueNode) #WHERE NOT (root) <-- ()
+MATCH (root)-[:CONTAINS*]->(leaf:ValueNode) WHERE NOT (leaf)-[:CONTAINS]->() AND (leaf.identifier IN leafPID OR elementId(leaf) IN leafEID)
+WITH size(collect(DISTINCT leaf)) AS sizes, root, len
+
+MATCH p = (root)-[*]->(n) WHERE sizes = len AND (EXISTS{ MATCH t = (root)-[*]->(n) WHERE t <> p })
+RETURN p
+
+
+Comb cov
+
+MATCH (root:ValueNode) WHERE NOT (root)<--()
+MATCH (root)-[:CONTAINS*]->(vn:ValueNode) WHERE NOT (vn)-[:CONTAINS]->() AND (vn.identifier IN ["5c9573292a0784c352a1c1d1cfac4242", "451c9c90e9fb8dde88ebc62a989144a8"] OR elementId(vn) IN ["4:ff0859ac-496c-403c-b1cb-8a0bb1eafbc9:236", "4:ff0859ac-496c-403c-b1cb-8a0bb1eafbc9:276", "4:ff0859ac-496c-403c-b1cb-8a0bb1eafbc9:285", "4:ff0859ac-496c-403c-b1cb-8a0bb1eafbc9:232", "4:ff0859ac-496c-403c-b1cb-8a0bb1eafbc9:229", "4:ff0859ac-496c-403c-b1cb-8a0bb1eafbc9:270", "4:ff0859ac-496c-403c-b1cb-8a0bb1eafbc9:245"])
+WITH collect(vn) AS root_coverage, elementId(root) AS _
+UNWIND apoc.coll.combinations(root_coverage, 2) as node_couple
+WITH node_couple, count(node_couple) AS weight
+CALL apoc.coll.elements(node_couple) YIELD _1n, _2n
+CALL apoc.create.vRelationship(_1n, 'COMBINED', {weight: weight}, _2n) YIELD rel
+RETURN _1n, rel, _2n, weight
+ORDER BY weight DESC
+
+
+Comb cov list
+
+MATCH (root:ValueNode) WHERE NOT (root)<--()
+MATCH (root)-[:CONTAINS*]->(vn:ValueNode)
+WHERE NOT (vn)-[:CONTAINS]->() AND (vn.identifier IN ["5c9573292a0784c352a1c1d1cfac4242", "451c9c90e9fb8dde88ebc62a989144a8"] OR elementId(vn) IN ["4:ff0859ac-496c-403c-b1cb-8a0bb1eafbc9:236", "4:ff0859ac-496c-403c-b1cb-8a0bb1eafbc9:276", "4:ff0859ac-496c-403c-b1cb-8a0bb1eafbc9:285", "4:ff0859ac-496c-403c-b1cb-8a0bb1eafbc9:232", "4:ff0859ac-496c-403c-b1cb-8a0bb1eafbc9:229", "4:ff0859ac-496c-403c-b1cb-8a0bb1eafbc9:270", "4:ff0859ac-496c-403c-b1cb-8a0bb1eafbc9:245"])
+WITH apoc.coll.sortNodes(collect(vn), 'value') AS coverage, elementId(root) AS rid
+RETURN coverage
+
+
+Opt cov
+
+MATCH (sn:SpecificationNode) WHERE elementId(sn) = '4:ff0859ac-496c-403c-b1cb-8a0bb1eafbc9:300'
+OPTIONAL MATCH (sn)-[:CONTAINS*]->(n:SpecificationNode)<-[:IS_SPECIFIED_BY]-(vn:ValueNode) WHERE (sn.type IN ['list', 'dict']) AND NOT (n.type IN ['list', 'dict'])
+OPTIONAL MATCH (sn)<-[:IS_SPECIFIED_BY]-(v2n:ValueNode) WHERE NOT (sn.type IN ['list', 'dict'])
+return
+CASE vn
+  WHEN IS NULL THEN v2n
+  ELSE vn
+END AS result
+
+
+Opt cov pretty
+
+MATCH (sn:SpecificationNode) WHERE elementId(sn) = '4:ff0859ac-496c-403c-b1cb-8a0bb1eafbc9:300'
+OPTIONAL MATCH p=(sn)-[:CONTAINS*]->(n:SpecificationNode)<-[:IS_SPECIFIED_BY]-(:ValueNode) WHERE (sn.type IN ['list', 'dict']) AND NOT (n.type IN ['list', 'dict'])
+OPTIONAL MATCH t=(sn)<-[:IS_SPECIFIED_BY]-(:ValueNode) WHERE NOT (sn.type IN ['list', 'dict'])
+return
+CASE p
+  WHEN IS NULL THEN t
+  ELSE p
+END AS result
