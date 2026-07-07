@@ -12,6 +12,8 @@ jobs:
       uses: actions/setup-python@v5
       with:
         python-version: '3.14'
+    - name: Install Dependencies
+      run: pip install numpy
 
     - name: MYTEST
       run: python3.14 arcane2graph/jsonToTCM.py test
