@@ -158,6 +158,10 @@ WITH root"""
     
     ################## Node prevalence update ##############
 
+    #TODO User-Defined functions to create in java, it will be able to be called directly in Neo4j; must add .jar file in plugins of Neo4j instance 
+    # https://github.com/neo4j-examples/neo4j-procedure-template/
+    # https://neo4j.com/docs/java-reference/4.3/extending-neo4j/procedures/
+    # https://neo4j.com/docs/java-reference/4.3/extending-neo4j/customized-code/
     @staticmethod
     def set_leaves_prevalence(session):
         query = """MATCH (leaf:ValueNode)-[:IS_SPECIFIED_BY]->(sleaf:SpecificationNode) WHERE NOT (leaf)-[:CONTAINS]->()
