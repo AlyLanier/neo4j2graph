@@ -160,8 +160,10 @@ class TCM:
             if sig: signature_items.append(sig)
         
         if signature_items == []: return None
-        signature = (mother_node.name(), (data_type, sorted(signature_items)))
-        mother_node.set_signature(signature[1])
+        signature_item = (data_type, sorted(signature_items)) if data_type == "dict" else (data_type, signature_items)
+        mother_node.set_signature(signature_item)
+        
+        signature = (mother_node.name(), signature_item)
         return signature
 
 
