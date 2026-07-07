@@ -5,7 +5,7 @@ import os, sys
 from functools import reduce
 from itertools import compress
 from pydoc import locate
-
+# TODO very important, redo all
 class TCMtoDB:
     MAX_MATCH_PER_QUERY = 15
     final_queries = {"node_creation" : [], "node_matching" : {}, "edge_creation" : [], "type_change" : {}}
