@@ -234,7 +234,7 @@ class TCM:
         return Node(label, value, path, stype)
     
     def create_edge(self, source, target, index = None):
-        if index is not None: print(f"index = {index}, source : {source}, target : {target}")
+        # if index is not None: print(f"index = {index}, source : {source}, target : {target}")
         return Edge(source, target, index)
     
     def get_annotations(self, annotation_type = "all"):

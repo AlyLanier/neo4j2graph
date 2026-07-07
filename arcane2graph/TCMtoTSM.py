@@ -148,7 +148,7 @@ class TSM:
         root_id = tcm_root.get_identifier()
         self.add_annotation("filenames", root_id, self.tcm_annotations["filenames"][root_id])
         self.catch_missing_input(tcm)
-        print(self.get_annotations())
+        # print(self.get_annotations())
 
     def process_option_value(self, current_node, tcm_nodes, tcm_edges):
         v_nodes = self.get_value_nodes()
@@ -231,7 +231,6 @@ class TSM:
                         return
         
         if parent_s_node in self.previous_tsm_s_nodes:
-            print('yayyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy')
             self.add_annotation("optional_nodes", s_node.get_identifier(),  s_node.name())
     
     def catch_missing_input(self, tcm):
@@ -250,7 +249,7 @@ class TSM:
 
 def main():
     json_path = "arc_json"
-    #jsons_to_process = ['Mahyco_0x5b67d7517e00.json', 'Mahyco_0x5be0ee5cb7b0.json'] #TODO passe pas sur les nulls parce que les nodes avec null sont exactement les mêmes
+    #jsons_to_process = ['Mahyco_0x5b67d7517e00.json', 'Mahyco_0x5be0ee5cb7b0.json'] # passe pas sur les nulls parce que les nodes avec null sont exactement les mêmes
     jsons_to_process = ['Mahyco_0x5b67d7517e00.json', 'Mahyco_0x5aa3a2f6d0f0.json', 'Mahyco_0x5be0ee5cb7b0.json']
     processed_json = []
     for filename in jsons_to_process:
