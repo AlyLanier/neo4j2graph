@@ -37,6 +37,7 @@ jobs:
       run: |
         docker ps
         docker ps -a
+        docker container ls --format='{{.Names}}'
 
     #- name: test jsonToTCM
     #  run: python3.14 arcane2graph/jsonToTCM.py test
