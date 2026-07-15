@@ -107,7 +107,7 @@ if __name__ == "__main__":
         import test_.test_TSMtoNeo4j as test
         if len(args) == 5:
             db_URI, db_user, db_pw = args[2:5]
-            test.validate_db_from_TSM(db_URI, (db_user, db_pw))
+            test.validate_db_from_TSM([db_URI, (db_user, db_pw)])
         else:
             test.validate_db_from_TSM()
     elif args[1] == 'populate':
