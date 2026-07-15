@@ -11,44 +11,41 @@ class TCMtoDB:
     def setup_variables(tcm:TCM):
         tcm.unify_types() # needed for type consistency
         TCMtoDB.final_queries = {"node_matching" : {}, "node_creation" : [], "edge_creation" : [], "type_change" : {}}
+        TCMtoDB.db_info = {"db_value_nodes" : {}, "db_specification_nodes" : {}, "db_spec_paths" : {}, 
+                           "db_optional_nodes" : {}, "db_annotation_optional_node_id" : None}
         TCMtoDB.nodes_created = []
-        TCMtoDB.db_specification_nodes = {}
         TCMtoDB.path_of_s_nodes_to_create = []
-        TCMtoDB.db_value_nodes = {}
-        TCMtoDB.db_optional_nodes = None
         TCMtoDB.tcm_annotations = tcm.get_annotations()
-        print(TCMtoDB.tcm_annotations)
 
 
     ################## Expanding db with a tcm ######################
     
     @staticmethod
     def expand_neo4j_tsm(driver, db: str, tcm: TCM)->None:
-        print("-----------------------------------------------")
         TCMtoDB.setup_variables(tcm)
 
         with driver.session(database = db) as session:
             TCMtoDB.get_db_nodes_start(session, tcm)
         root = tcm.search_root(tcm.get_edges())
         
-        if root.get_identifier() in TCMtoDB.db_value_nodes:
+        if root.get_identifier() in TCMtoDB.db_info["db_value_nodes"]:
             with driver.session(database = db) as session:
                 session.run(TCMtoDB.annotation_tcm_in_db_query(root.get_identifier()))
             return
 
         TCMtoDB.process_option_value_to_neo4j(None, root, tcm.get_edges())
+        TCMtoDB.catch_missing_input(tcm)
         with driver.session(database = db) as session:
-            TCMtoDB.catch_missing_input(session, tcm)
             TCMtoDB.process_final_queries(session)
 
     @staticmethod
     def process_option_value_to_neo4j(mother_specification_element: str|list|None, current_node: Node, tcm_edges: list[Edge])->None:
-        if current_node.get_identifier() in TCMtoDB.db_value_nodes: return
+        if current_node.get_identifier() in TCMtoDB.db_info["db_value_nodes"]: return
         if current_node.get_identifier() in TCMtoDB.nodes_created: return
         print(f"Node to add to the graph : {current_node}")
 
         db_sn_element = None
-        if TCMtoDB.is_possible_query(mother_specification_element):
+        if TCMtoDB.is_from_db(mother_specification_element):
             db_sn_element = TCMtoDB.find_s_option(mother_specification_element, current_node)
 
         if db_sn_element is not None:
@@ -60,29 +57,12 @@ class TCMtoDB:
         
         TCMtoDB.node_creation(*current_node.get_v_node_creation_info())
         TCMtoDB.edge_creation([STARTING_CHAR+current_node.get_identifier()], new_msn_element, "IS_SPECIFIED_BY")
-
-        if current_node.get_identifier() in TCMtoDB.tcm_annotations["nonexistent_nodes"]:#TODO
-            if current_node.get_path() not in TCMtoDB.db_optional_nodes:
-                for node_name in TCMtoDB.tcm_annotations["nonexistent_nodes"][current_node.get_identifier()]:
-                    identifier = "s" + current_node.get_identifier()
-                    identifier = "s" + str(id(identifier))+identifier
-                    TCMtoDB.node_creation(identifier, node_name, 'bool')
-                    TCMtoDB.edge_creation(new_msn_element, [identifier], "CONTAINS")
-                    TCMtoDB.edge_creation(TCMtoDB.db_annotation_optional_node_id, [identifier], "ANNOTATES")
-            else:
-                for node_name in TCMtoDB.tcm_annotations["nonexistent_nodes"][current_node.get_identifier()]:
-                    if node_name not in TCMtoDB.db_optional_nodes[current_node.get_path()]:
-                        identifier = "s" + current_node.get_identifier()
-                        identifier = "s" + str(id(identifier))+identifier
-                        TCMtoDB.node_creation(identifier, node_name, 'bool')
-                        TCMtoDB.edge_creation(new_msn_element, [identifier], "CONTAINS")
-                        TCMtoDB.edge_creation(TCMtoDB.db_annotation_optional_node_id, [identifier], "ANNOTATES")
-
+        TCMtoDB.process_nonexistent_child_nodes(current_node, new_msn_element)
         
         edges_from_current_node = TCM.find_edges(tcm_edges, from_node=current_node)
         for edge_to_child in edges_from_current_node:
             child_id = edge_to_child.target().get_identifier()
-            if child_id in TCMtoDB.db_value_nodes: child_ref_id = TCMtoDB.db_value_nodes[child_id]
+            if child_id in TCMtoDB.db_info["db_value_nodes"]: child_ref_id = TCMtoDB.db_info["db_value_nodes"][child_id]
             else:
                 TCMtoDB.process_option_value_to_neo4j(new_msn_element, edge_to_child.target(), tcm_edges)
                 child_ref_id = [STARTING_CHAR+child_id]
@@ -91,7 +71,7 @@ class TCMtoDB:
 
     @staticmethod
     def process_root(current_node: Node)->list[str]:
-        if TCMtoDB.db_specification_nodes != {}:
+        if TCMtoDB.db_info["db_specification_nodes"] != {}:
             return TCMtoDB.get_db_s_root().element_id
         else:
             identifier = "s" + current_node.get_identifier()
@@ -109,56 +89,65 @@ class TCMtoDB:
             TCMtoDB.node_creation(identifier, current_node.name(), current_node.get_stype())
             TCMtoDB.edge_creation(mother_specification_element, [identifier], "CONTAINS")
             if isinstance(mother_specification_element, str): # mother spec in db but we have to create a child, therefore the child is optional
-                TCMtoDB.edge_creation(TCMtoDB.db_annotation_optional_node_id, [identifier], "ANNOTATES")
+                TCMtoDB.edge_creation(TCMtoDB.db_info["db_annotation_optional_node_id"], [identifier], "ANNOTATES")
 
         return [identifier]
     
     @staticmethod
-    def catch_missing_input(session, tcm):
-        specs_path_of_db = TCMtoDB.get_db_spec_nodes_paths(session)
+    def process_nonexistent_child_nodes(current_node: Node, mother_node):
+        if current_node.get_identifier() in TCMtoDB.tcm_annotations["nonexistent_nodes"]:
+            node_names = TCMtoDB.tcm_annotations["nonexistent_nodes"][current_node.get_identifier()]
+            if current_node.get_path() not in TCMtoDB.db_info["db_optional_nodes"]:
+                for node_name in node_names:
+                    TCMtoDB.create_nonexistent_node(current_node, mother_node, node_name)
+            else:
+                for node_name in node_names:
+                    if node_name not in TCMtoDB.db_info["db_optional_nodes"][current_node.get_path()]:
+                        TCMtoDB.create_nonexistent_node(current_node, mother_node, node_name)
+                        
+    @staticmethod
+    def create_nonexistent_node(current_node: Node, mother_node, node_name: str):
+        identifier = "s" + current_node.get_identifier()
+        identifier = "s" + str(id(identifier))+identifier
+        TCMtoDB.node_creation(identifier, node_name, 'bool')
+        TCMtoDB.edge_creation(mother_node, [identifier], "CONTAINS")
+        TCMtoDB.edge_creation(TCMtoDB.db_info["db_annotation_optional_node_id"], [identifier], "ANNOTATES")
+    
+    @staticmethod
+    def catch_missing_input(tcm):
+        specs_path_of_db = TCMtoDB.db_info["db_spec_paths"]
         specs_path_of_tcm = set(map(lambda x: x.get_path(), tcm.get_nodes()))
         for snode_path in specs_path_of_db:
             snode_id, msn_path = specs_path_of_db[snode_path]
             if snode_path not in specs_path_of_tcm and msn_path in specs_path_of_tcm:
-                TCMtoDB.edge_creation(TCMtoDB.db_annotation_optional_node_id, snode_id, "ANNOTATES")
+                TCMtoDB.edge_creation(TCMtoDB.db_info["db_annotation_optional_node_id"], snode_id, "ANNOTATES")
     
 
-    ################### Exists node in db ? ######################
+    ################### get db infos ######################
+
     @staticmethod
     def get_db_nodes_start(session, tcm:TCM)->None:
-        TCMtoDB.db_specification_nodes = TCMtoDB.get_db_specification_nodes(session)
-        TCMtoDB.db_value_nodes = TCMtoDB.already_existing_value_nodes(session, tcm)
-        TCMtoDB.db_annotation_optional_node_id, TCMtoDB.db_optional_nodes = TCMtoDB.get_db_optional_annotation_node(session)
+        TCMtoDB.db_info["db_specification_nodes"] = TCMtoDB.get_db_specification_nodes(session)
+        TCMtoDB.db_info["db_spec_paths"] = TCMtoDB.get_db_spec_nodes_paths(session)
+        TCMtoDB.db_info["db_value_nodes"] = TCMtoDB.already_existing_value_nodes(session, tcm)
+        TCMtoDB.db_info["db_annotation_optional_node_id"], TCMtoDB.db_info["db_optional_nodes"] = TCMtoDB.get_db_optional_annotation_node(session)
 
     @staticmethod
     def already_existing_value_nodes(session, tcm:TCM)-> dict[str, str]:
-        res = {}
         identifiers = list(set(map(lambda x: x.get_identifier(), tcm.get_nodes())))
         query = f"""WITH [{str(identifiers)[1:-1]}] AS identifiers UNWIND identifiers AS ident
 OPTIONAL MATCH (v:ValueNode {{identifier: ident}})
 RETURN ident, elementId(v) AS e_id"""
         query_results = session.run(query)
-        for result in query_results:
-            ident, element_id = result
-            if element_id is not None:
-                res[ident] = element_id
-
-        return res
-
+        return {ident: element_id for ident, element_id in query_results if element_id is not None}
 
     @staticmethod
     def get_db_specification_nodes(session)->dict:
         query = """MATCH (s:SpecificationNode)
 OPTIONAL MATCH (s)-[:CONTAINS]->(a)
 RETURN s, collect(elementId(a))"""
-        res = {}
         results = session.run(query)
-        for node, child_list in results:
-            if child_list != []:
-                res[node] = list(map(lambda s: s[39:], child_list))
-            else:
-                res[node] = []
-        return res
+        return {node: list(map(lambda s: s[39:], child_list)) for node, child_list in results}
 
     @staticmethod
     def get_db_optional_annotation_node(session):
@@ -176,12 +165,8 @@ MATCH (a:AnnotationNode {annotation: 'This value is optional'})-[:ANNOTATES]->(s
 MATCH p = (sroot)-[:CONTAINS*]->(s) WITH collect(s.name) as non_existent_nodes, reduce(acc = "root", n in nodes(p)[1..-1]| acc + '.' + n.name) as ne_nodes_path
 RETURN non_existent_nodes, ne_nodes_path"""
         result2 = session.run(query)
-        optional_nodes_name = {}
-        for names, path in result2:
-            optional_nodes_name[path] = names
+        return result, {path: names for names, path in result2}
         
-        return result, optional_nodes_name
-    
     @staticmethod
     def get_db_spec_nodes_paths(session):
         query = """MATCH (sroot:SpecificationNode) WHERE NOT (sroot)<-[:CONTAINS]-()
@@ -189,22 +174,18 @@ MATCH p = (sroot)-[:CONTAINS*]->(s:SpecificationNode)
 WITH elementId(s) as e_id, reduce(acc = 'root', n in nodes(p)[1..-1]|acc + '.' + n.name) as mother_path, nodes(p)[-1].name as last_name
 RETURN e_id, mother_path, mother_path+'.'+last_name"""
         result = session.run(query)
-        res = {}
-        for e_id, mother_path, path in result:
-            res[path] = (e_id, mother_path)
-        return res
+        return {path: (e_id, mother_path) for e_id, mother_path, path in result}
+
+
+    ################# Utils ####################
 
     @staticmethod
-    def is_result_empty(query_result)->bool:
-        return query_result.peek() is None
-
-    @staticmethod
-    def is_possible_query(db_identifier: str|list|None)->bool:
+    def is_from_db(db_identifier: str|list|None)->bool:
         return db_identifier is not None and not isinstance(db_identifier, list)
     
     @staticmethod
     def get_db_s_root():
-        for node in TCMtoDB.db_specification_nodes.keys():
+        for node in TCMtoDB.db_info["db_specification_nodes"].keys():
             if node["name"] == "root":
                 return node
         raise Exception("[CRITICAL ERROR] no root node found in the db, must have name 'root'")
@@ -251,9 +232,9 @@ FOREACH(n IN value_nodes | SET n.value = {cast_method})"""
     
     @staticmethod
     def find_s_option(mother_specification_element: str, current_node: Node):
-        for k, v in TCMtoDB.db_specification_nodes.items():
+        for k, v in TCMtoDB.db_info["db_specification_nodes"].items():
             if k.element_id == mother_specification_element:
-                for child_k in TCMtoDB.db_specification_nodes.keys():
+                for child_k in TCMtoDB.db_info["db_specification_nodes"].keys():
                     if child_k["name"] == current_node.name() and child_k.element_id[39:] in v:
                         return child_k
         return None
@@ -292,8 +273,6 @@ FOREACH(n IN value_nodes | SET n.value = {cast_method})"""
         if TCMtoDB.final_queries["edge_creation"] != []:    query += TCMtoDB.edge_creation_query()+"\n"
         query += TCMtoDB.file_annotation_query()
         
-        print(query)
-        #return
         session.run(query)
     
     @staticmethod
@@ -311,7 +290,6 @@ FOREACH(n IN value_nodes | SET n.value = {cast_method})"""
             match len(n_tuple):
                 case 1:
                     identifier, = n_tuple
-                    print(n_tuple, identifier)
                     queries.append(f"CREATE ({identifier}:AnnotationNode {{annotation: 'This value is optional'}})")
                 case 2:
                     identifier, value = n_tuple
@@ -352,14 +330,10 @@ SET f.filenames = f.filenames + '{file_name}'"""
 
 
 def main():
-
     URI = "bolt://localhost:7687"
     AUTH = ("neo4j", "password")
     DB_NAME = AUTH[0]
     json_path = "arc_json"
-
-    
-
     
     files_to_consider = ['Mahyco_0x5b67d7517e00.json', 'Mahyco_0x5aa3a2f6d0f0.json', 'Mahyco_0x5be0ee5cb7b0.json']
     processed_json = []
@@ -367,18 +341,14 @@ def main():
         file_path = os.path.join(json_path, filename)
         print(file_path)
         processed_json.append(TCM(file_path, 'mahyco'))
-    #tsm = TSM(processed_json[:-1])
-    #tsm_str = TSM_creation_query(tsm)
-    
-
     
 
     with GraphDatabase.driver(URI, auth=AUTH) as driver:
         driver.verify_connectivity()
         driver.execute_query("MATCH (p)\nDETACH DELETE p")# remove current graph
-        #driver.execute_query(tsm_str)# build graph here
         for tcm in processed_json:
             TCMtoDB.expand_neo4j_tsm(driver, DB_NAME, tcm)
+            print("-------------------------------------")
         
     return
 
