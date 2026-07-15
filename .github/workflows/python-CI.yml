@@ -13,9 +13,11 @@ jobs:
     services:
       neo4j:
         image: neo4j:latest
+        options: > 
+          --name test
         volumes:
-          - ./data:/data:Z
-          - ./plugins:/plugins:Z
+          - ./data:"/data:Z"
+          - ./plugins:"/plugins:Z"
         ports:                    
         - 7474:7474 # used for http
         - 7687:7687 # used for bolt
@@ -37,7 +39,7 @@ jobs:
       run: |
         docker ps
         docker ps -a
-        docker container ls --format='{{.Names}}'
+        
 
     #- name: test jsonToTCM
     #  run: python3.14 arcane2graph/jsonToTCM.py test
