@@ -44,10 +44,13 @@ jobs:
         docker ps -a
         
 
-    #- name: test jsonToTCM
-    #  run: python3.14 arcane2graph/jsonToTCM.py test
-    #- name: test TCMtoTSM
-    #  run: python3.14 arcane2graph/TCMtoTSM.py test
+    - name: test jsonToTCM
+      run: python3.14 arcane2graph/jsonToTCM.py test
+    - name: test TCMtoTSM
+      run: python3.14 arcane2graph/TCMtoTSM.py test
     - name: test TSMtoDB
-      run: python3.14 arcane2graph/TSMtoNeo4j.py test bolt://localhost:7687 ${{ env.NEO4J_USER }} ${{ env.NEO4J_PASSWORD }}
+      run: |
+        docker ps
+        docker ps -a
+        python3.14 arcane2graph/TSMtoNeo4j.py test bolt://localhost:7687 ${{ env.NEO4J_USER }} ${{ env.NEO4J_PASSWORD }}
     
