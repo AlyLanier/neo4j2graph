@@ -41,5 +41,5 @@ jobs:
     - name: test TCMtoTSM
       run: python3.14 arcane2graph/TCMtoTSM.py test
     - name: test TSMtoDB
-      run: 
+      run: python3.14 arcane2graph/TSMtoNeo4j.py test bolt://localhost:7687 ${{ env.NEO4J_USER }} ${{ env.NEO4J_PASSWORD }}
     
