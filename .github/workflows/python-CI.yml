@@ -2,21 +2,48 @@ name: Python CI
 
 on: [push]
 
+env:  
+  NEO4J_USER: neo4j
+  NEO4J_PASSWORD: password
+  
+
+
 jobs:
+    
+
   tests:
     runs-on: ubuntu-latest
 
+    services:
+      neo4j:
+        image: neo4j:latest
+        volumes:
+          - $PWD/data:/data/Z
+          - $PWD/plugins:/plugins:Z
+        ports:                    
+        - 7474:7474 # used for http
+        - 7687:7687 # used for bolt
+        env:       
+          NEO4J_AUTH: neo4j/password  
+          NEO4J_apoc_export_file_enabled: "true"
+          NEO4J_apoc_import_file_enabled: "true"
+          NEO4J_apoc_import_file_use__neo4j__config: "true"
+
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v6
     - uses: actions/setup-python@v5
       with:
         python-version: '3.14'
         cache: 'pip'
     - name: Install Dependencies
       run: pip install -r requirements.txt
-      
+    - name: start db
+      run: docker run -d neo4j --name neo4j-test
 
     - name: test jsonToTCM
       run: python3.14 arcane2graph/jsonToTCM.py test
     - name: test TCMtoTSM
       run: python3.14 arcane2graph/TCMtoTSM.py test
+    - name: test TSMtoDB
+      run: 
+    
