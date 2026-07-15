@@ -5,6 +5,7 @@ on: [push]
 env:  
   NEO4J_USER: neo4j
   NEO4J_PASSWORD: password
+  NEO4J_CONTAINER_NAME: test
 
 jobs:
   tests:
@@ -26,6 +27,8 @@ jobs:
           NEO4J_apoc_export_file_enabled: "true"
           NEO4J_apoc_import_file_enabled: "true"
           NEO4J_apoc_import_file_use__neo4j__config: "true"
+          NEO4J_dbms_connector_bolt_advertised__address: localhost:7687
+          NEO4JLABS_PLUGINS: '["apoc", "apoc-extended"]'
 
     steps:
     - uses: actions/checkout@v6
@@ -36,12 +39,7 @@ jobs:
     - name: Install Dependencies
       run: pip install -r requirements.txt
     - name: start db
-      run: |
-        docker ps
-        docker ps -a
-        docker start test
-        docker ps
-        docker ps -a
+      run: docker start ${{env.NEO4J_CONTAINER_NAME}}
         
 
     - name: test jsonToTCM
