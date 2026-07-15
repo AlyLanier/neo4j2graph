@@ -16,8 +16,8 @@ jobs:
         options: > 
           --name test
         volumes:
-          - ./data:"/data:Z"
-          - ./plugins:"/plugins:Z"
+          - ./data:/data:Z
+          - ./plugins:/plugins:Z
         ports:                    
         - 7474:7474 # used for http
         - 7687:7687 # used for bolt
