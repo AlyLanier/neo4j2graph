@@ -49,5 +49,5 @@ jobs:
       run: |
         docker ps
         docker ps -a
-        python3.14 arcane2graph/TSMtoNeo4j.py test host.docker.internal:7687 ${{ env.NEO4J_USER }} ${{ env.NEO4J_PASSWORD }}
+        python3.14 arcane2graph/TSMtoNeo4j.py test bolt://host:7687 ${{ env.NEO4J_USER }} ${{ env.NEO4J_PASSWORD }}
     
