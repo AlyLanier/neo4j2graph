@@ -39,6 +39,9 @@ jobs:
       run: |
         docker ps
         docker ps -a
+        docker start test
+        docker ps
+        docker ps -a
         
 
     #- name: test jsonToTCM
