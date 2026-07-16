@@ -4,10 +4,10 @@ from test_.test_TCMtoTSM import test_tsm
 
 def validate_db(by_query = True):
     URI = "bolt://localhost:7687"
-    AUTH = ("neo4j", "password")
+    AUTH = (os.getenv("NEO4J_USER"), os.getenv("NEO4J_PASSWORD"))
     DB_NAME = AUTH[0]
 
-    with GraphDatabase.driver(URI, auth=AUTH) as driver:
+    with GraphDatabase.driver(URI, auth=AUTH, encrypted=False) as driver:
         driver.verify_connectivity()
 
         with driver.session(database = DB_NAME) as session:
