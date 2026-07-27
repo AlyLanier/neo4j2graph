@@ -142,7 +142,7 @@ class TCM:
 
     def nodify(self, data, data_key):
         data = TCM.find_real_data(data, data_key)
-        path = data_key
+        path = 'root'
         root = self.create_node("root", None, path)
         nodes = [root]
         edges = []

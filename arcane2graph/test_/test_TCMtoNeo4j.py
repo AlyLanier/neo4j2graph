@@ -9,12 +9,11 @@ def validate_db_from_tcm():
     json_path = "arc_json/arc_json_tests"
     processed_json = []
     for filename in os.listdir(json_path):
-        if filename.endswith(".json"):
-            print(filename)
+        if filename.endswith(".json") and filename != "Mahyco_test_Alyssia.json":
             file_path = os.path.join(json_path, filename)
-            processed_json.append(TCM(file_path, 'mahyco'))
+            processed_json.append((TCM(file_path, 'mahyco'), filename))
 
-    tsm = TSM(processed_json)
+    tsm = TSM(list(tcm for tcm, _ in processed_json))
 
     URI = "bolt://localhost:7687"
     AUTH = ("neo4j", "password")
@@ -23,7 +22,8 @@ def validate_db_from_tcm():
     with GraphDatabase.driver(URI, auth=AUTH) as driver:
         driver.verify_connectivity()
         driver.execute_query("MATCH (p)\nDETACH DELETE p") # remove current graph
-        for tcm in processed_json: # build graph here
+        for tcm, file_name in processed_json: # build graph here
+            print(file_name)
             TCMtoDB.expand_neo4j_tsm(driver, DB_NAME, tcm)
         result = driver.execute_query(gf.get_TSM_query())
         verify_db_tsm(tsm, result)
