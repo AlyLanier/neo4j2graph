@@ -148,7 +148,7 @@ class TSM:
         root_id = tcm_root.get_identifier()
         self.add_annotation("filenames", root_id, self.tcm_annotations["filenames"][root_id])
         self.catch_missing_input(tcm)
-        print(self.get_annotations())
+        #print(self.get_annotations())
 
     def process_option_value(self, current_node, tcm_nodes, tcm_edges):
         v_nodes = self.get_value_nodes()
@@ -231,7 +231,6 @@ class TSM:
                         return
         
         if parent_s_node in self.previous_tsm_s_nodes:
-            print('yayyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy')
             self.add_annotation("optional_nodes", s_node.get_identifier(),  s_node.name())
     
     def catch_missing_input(self, tcm):
