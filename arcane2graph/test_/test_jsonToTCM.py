@@ -5,12 +5,13 @@ from ddt import ddt, data
 
 #################### TESTS ######################
 
+def get_files():
+    return [os.path.join("arc_json/arc_json_tests", filename) for filename in os.listdir("arc_json/arc_json_tests") if filename.endswith(".json")]
+                    
+
 @ddt
 class TestTCMCreation(unittest.TestCase):
-    @staticmethod
-    def get_TCMs():
-        return TestTCMCreation.processed_tcm
-
+    
     @classmethod
     def setUpClass(cls):
         json_path = "arc_json/arc_json_tests"
@@ -20,10 +21,11 @@ class TestTCMCreation(unittest.TestCase):
             if filename.endswith(".json"):
                 file_path = os.path.join(json_path, filename)
                 print(file_path)
-                cls.processed_tcm.append(TCM(file_path, 'mahyco'))
+                cls.processed_tcm[file_path] = TCM(file_path, 'mahyco')
                 
-    @data(*get_TCMs())
-    def test_structure(self, tcm):
+    @data(*get_files())
+    def test_structure(self, tcm_file):
+        tcm = TestTCMCreation.processed_tcm[tcm_file]
         nodes, edges = tcm.get_model()
 
         self.assertTrue(is_correct_node_types((nodes, Node)), "All nodes must be of type 'Node'")
@@ -33,8 +35,9 @@ class TestTCMCreation(unittest.TestCase):
         self.assertTrue(is_correct_edge_types(edges, Edge, [lambda edge: isinstance(edge.source(), Node) and isinstance(edge.target(), Node)]), 
                         "All edges must be of type 'Edge', and all nodes at their ends must be of type 'Node'")
 
-    @data(*get_TCMs())
-    def test_validity(self, tcm):
+    @data(*get_files())
+    def test_validity(self, tcm_file):
+        tcm = TestTCMCreation.processed_tcm[tcm_file]
         nodes, edges = tcm.get_model()
 
         self.assertFalse(is_duplicate(nodes, edges), "There must not be duplicate nodes or edges")
@@ -61,8 +64,9 @@ class TestTCMCreation(unittest.TestCase):
                     self.assertEqual(len(children), len(children_names))
         
 
-    @data(*get_TCMs())
-    def test_acyclic(self, tcm):
+    @data(*get_files())
+    def test_acyclic(self, tcm_file):
+        tcm = TestTCMCreation.processed_tcm[tcm_file]
         nodes = tcm.get_nodes()
         edges = tcm.get_edges()
 
@@ -88,4 +92,4 @@ class TestTCMCreation(unittest.TestCase):
             TestTCMCreation.acyclic_rec(child, edges, seen_nodes)
 
     
-unittest.main()
+unittest.main(argv=['first-arg-is-ignored'], exit=False)
