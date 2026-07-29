@@ -6,7 +6,7 @@ from ddt import ddt, data
 #################### TESTS ######################
 
 def get_files():
-    return [os.path.join("arc_json/arc_json_tests", filename) for filename in os.listdir("arc_json/arc_json_tests") if filename.endswith(".json")]
+    return {os.path.join("arc_json/arc_json_tests", filename): TCM(filename) for filename in os.listdir("arc_json/arc_json_tests") if filename.endswith(".json")}
                     
 
 @ddt
