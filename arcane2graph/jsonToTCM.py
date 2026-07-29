@@ -247,6 +247,30 @@ class TCM:
         if k in self.annotations[annotation_type]:  self.annotations[annotation_type][k].append(v)
         else:                                       self.annotations[annotation_type][k] = [v]
 
+    def get_nodes_per_depth(self, reverse = False):
+        edges = self.get_edges()
+        ret = [[TCM.search_root(self.get_edges())]]
+        for prev_depth in ret:
+            new_depth = []
+            for node in prev_depth:
+                new_depth += TCM.find_children(node, edges)
+            if new_depth != []: ret.append(new_depth)
+
+        if reverse: ret.reverse()
+        return ret
+
+    def get_leaves(self, source_node):
+        edges = self.get_edges()
+        ret = []
+
+        to_process = TCM.find_children(source_node, edges)
+        for node in to_process:
+            if TCM.is_leaf(node, edges):ret.append(node)
+            else:                       to_process += TCM.find_children(node, edges)
+
+        return ret
+
+
 
     ################ node/edge finder #############################
 
@@ -316,6 +340,10 @@ class TCM:
     @staticmethod
     def is_root(node, edge_list):
         return [] == TCM.find_parents(node, edge_list)
+
+    @staticmethod
+    def is_leaf(node, edge_list):
+        return [] == TCM.find_children(node, edge_list)
     
     @staticmethod
     def search_root(edge_list, start_edge = 0):

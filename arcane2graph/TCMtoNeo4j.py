@@ -7,6 +7,8 @@ from functools import reduce
 from pydoc import locate
 
 class TCMtoDB:
+    VALUES_GENRE = {"enumeration": (bool, int, str), "range": (float,)}
+
     @staticmethod
     def setup_variables(tcm:TCM):
         tcm.unify_types() # needed for type consistency
@@ -21,7 +23,7 @@ class TCMtoDB:
     ################## Expanding db with a tcm ######################
     
     @staticmethod
-    def expand_neo4j_tsm(driver, db: str, tcm: TCM)->None:
+    def expand_neo4j_tsm(driver, db: str, tcm: TCM, return_score: bool = None)->None:
         TCMtoDB.setup_variables(tcm)
 
         with driver.session(database = db) as session:
@@ -62,7 +64,7 @@ class TCMtoDB:
         edges_from_current_node = TCM.find_edges(tcm_edges, from_node=current_node)
         for edge_to_child in edges_from_current_node:
             child_id = edge_to_child.target().get_identifier()
-            if child_id in TCMtoDB.db_info["db_value_nodes"]: child_ref_id = TCMtoDB.db_info["db_value_nodes"][child_id]
+            if child_id in TCMtoDB.db_info["db_value_nodes"]: child_ref_id = TCMtoDB.db_info["db_value_nodes"][child_id][0]
             else:
                 TCMtoDB.process_option_value_to_neo4j(new_msn_element, edge_to_child.target(), tcm_edges)
                 child_ref_id = [STARTING_CHAR+child_id]
@@ -121,6 +123,49 @@ class TCMtoDB:
             snode_id, msn_path = specs_path_of_db[snode_path]
             if snode_path not in specs_path_of_tcm and msn_path in specs_path_of_tcm:
                 TCMtoDB.edge_creation(TCMtoDB.db_info["db_annotation_optional_node_id"], snode_id, "ANNOTATES")
+
+    @staticmethod
+    def compute_score(session, node: Node, tcm: TCM, mode: bool) -> float: #True for dev mode, False for user mode
+        if not mode : return 1 - TCMtoDB.compute_score(node, tcm, True)
+
+        return TCMtoDB.compute_score_bis(tcm.get_leaves(node))
+
+    @staticmethod
+    def compute_score_bis(session, leaf_nodes: list[Node]):
+        
+
+        pass
+
+
+
+    @staticmethod
+    def compute_score_existing_leaf(node: Node) -> float:
+        node_id = node.get_identifier()
+        node_value = node.val()
+
+        if isinstance(node_value, TCMtoDB.VALUES_GENRE["enumerate"]):   return TCMtoDB.db_info["db_value_nodes"][node_id][1] #TODO or 2 for ordered
+        elif isinstance(node_value, TCMtoDB.VALUES_GENRE["range"]):     return 1.
+
+    @staticmethod
+    def compute_score_non_existing_leaf(session, node: Node) -> float:
+        node_id = node.get_identifier()
+        node_value = node.val()
+
+        if isinstance(node_value, TCMtoDB.VALUES_GENRE["enumerate"]):   return 0.
+        elif isinstance(node_value, TCMtoDB.VALUES_GENRE["range"]):     pass
+
+            
+
+    @staticmethod
+    def get_db_score_for_range_node(session, node_value: float, spec_eid: str) -> float:
+        query = f"""MATCH (a:AnnotationNode)-[:ANNOTATES]->(spec:SpecificationNode)<-[:IS_SPECIFIED_BY]-(vn:ValueNode) WHERE elementId(spec) = {spec_eid} 
+WITH collect(vn.value ORDER BY vn.value) AS values_ordered, min(abs(vn - {node_value})), a.range AS range
+LET score_func = TSM_Statistics.score(values_ordered, range)
+
+RETURN ({node_value})
+"""#TODO how does it work for user defined functions ?
+        return session.run(query).single()[0]
+
     
 
     ################### get db infos ######################
@@ -137,9 +182,9 @@ class TCMtoDB:
         identifiers = list(set(map(lambda x: x.get_identifier(), tcm.get_nodes())))
         query = f"""WITH [{str(identifiers)[1:-1]}] AS identifiers UNWIND identifiers AS ident
 OPTIONAL MATCH (v:ValueNode {{identifier: ident}})
-RETURN ident, elementId(v) AS e_id"""
+RETURN ident, elementId(v) AS e_id, v.prevalence, v.prevalence_ordered"""
         query_results = session.run(query)
-        return {ident: element_id for ident, element_id in query_results if element_id is not None}
+        return {ident: (element_id, prev, prev_ord) for ident, element_id, prev, prev_ord in query_results if element_id is not None}
 
     @staticmethod
     def get_db_specification_nodes(session)->dict:
@@ -147,7 +192,7 @@ RETURN ident, elementId(v) AS e_id"""
 OPTIONAL MATCH (s)-[:CONTAINS]->(a)
 RETURN s, collect(elementId(a))"""
         results = session.run(query)
-        return {node: list(map(lambda s: s[39:], child_list)) for node, child_list in results}
+        return {node: list(map(lambda s: s[39:], child_list)) for node, child_list in results} #TODO regex on last ':'
 
     @staticmethod
     def get_db_optional_annotation_node(session):
@@ -327,6 +372,24 @@ FOREACH(n IN value_nodes | SET n.value = {cast_method})"""
         return f"""MATCH (f:FileNode) WHERE (f)-[:ANNOTATES]->(:ValueNode {{identifier: '{root_identifier}'}})
 SET f.filenames = f.filenames + '{file_name}'"""
 
+def main_populate():
+    json_path = 'arc_json'
+    jsons_to_process = [os.path.join(json_path, filename) for filename in os.listdir(json_path) if filename.endswith(".json")]
+
+    URI = "bolt://localhost:7687"
+    AUTH = ("neo4j", "password")
+
+    with GraphDatabase.driver(URI, auth=AUTH) as driver:
+        driver.verify_connectivity()
+        driver.execute_query("MATCH (p)\nDETACH DELETE p") # remove current graph
+        print("deleted previous db")
+
+        for tcm_json in jsons_to_process:
+            print(tcm_json)
+            tcm = TCM(tcm_json, 'mayhco')
+            TCMtoDB.expand_neo4j_tsm(driver, AUTH[0], tcm)
+
+
 
 
 def main():
@@ -341,6 +404,11 @@ def main():
         file_path = os.path.join(json_path, filename)
         print(file_path)
         processed_json.append(TCM(file_path, 'mahyco'))
+
+    for tcm in processed_json:
+        TCMtoDB.compute_score(tcm, False)
+
+    return
     
 
     with GraphDatabase.driver(URI, auth=AUTH) as driver:
@@ -372,3 +440,5 @@ if __name__ == "__main__":
     elif args[1] == 'test':
         import test_.test_TCMtoNeo4j as test
         test.validate_db_from_tcm()
+    elif args[1] == 'populate':
+        main_populate()
