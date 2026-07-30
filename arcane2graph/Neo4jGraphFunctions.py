@@ -187,7 +187,7 @@ SET leaf.prevalence = toFloat(leaf.occurrence)/sleaf.occurrence"""
         db_data = GraphFunctions.get_nodes_for_prevalence(session, compute_with_occurrence)
         
         if compute_with_occurrence:
-            harmonic_mean = power_mean_rationnal(-1)
+            harmonic_mean = power_mean_rational(-1)
             for result in db_data:
                 node_element, associated_leaves = result
                 leaves_occurrence = list(map(lambda n: (n[0]['occurrence'], n[1]['occurrence']), associated_leaves))

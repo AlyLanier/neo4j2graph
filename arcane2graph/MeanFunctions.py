@@ -17,7 +17,7 @@ def sum_frac(x, y):
     return numerator, denominator
 
 
-def power_mean_rationnal(order : int):
+def power_mean_rational(order : int):
     compute = lambda x: x[0]/x[1]
     mult = lambda x, y: (x[0]*y[0], x[1]*y[1])
     exp_inv = lambda x, e: compute(x)**(1/e)
@@ -36,7 +36,7 @@ def quasi_arithmetic_mean(func, inverse_func):
 
 if __name__ == '__main__':
     values = [(1, 7), (5, 7), (6, 13)]
-    test = power_mean_rationnal(-1)
+    test = power_mean_rational(-1)
     print(test(values))
     test2 = power_mean(-1)
     print(test2(list(map(lambda x: x[0]/x[1], values))))
