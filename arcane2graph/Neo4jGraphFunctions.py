@@ -158,68 +158,96 @@ WITH root"""
     
     ################## Node prevalence update ##############
 
-    #TODO User-Defined functions to create in java, it will be able to be called directly in Neo4j; must add .jar file in plugins of Neo4j instance 
+    # User-Defined functions to create in java, it will be able to be called directly in Neo4j; must add .jar file in plugins of Neo4j instance 
     # https://github.com/neo4j-examples/neo4j-procedure-template/
     # https://neo4j.com/docs/java-reference/4.3/extending-neo4j/procedures/
     # https://neo4j.com/docs/java-reference/4.3/extending-neo4j/customized-code/
+    # TODO done, need to put the project as a module
+    # TODO maybe optimize query by processing by depth
+    # TODO do we really need ordered occurrences ?
+
     @staticmethod
-    def set_leaves_prevalence(session):
-        query = """MATCH (leaf:ValueNode)-[:IS_SPECIFIED_BY]->(sleaf:SpecificationNode) WHERE NOT (leaf)-[:CONTAINS]->()
-SET sleaf.occurrence = 0 WITH leaf, sleaf
-MATCH (root:ValueNode) WHERE NOT (root) <-[:CONTAINS]- ()
-MATCH p = (root)-[:CONTAINS*]->(leaf) WITH collect(p) AS paths, leaf, sleaf
-CALL(paths, leaf){
-  WITH size(paths) AS occurrence, leaf
-  SET leaf.occurrence = occurrence
+    def set_prevalence(session):
+        session.run(GraphFunctions.set_occurrences_query())
+        session.run(GraphFunctions.set_leaves_prevalence_query())
+        session.run(GraphFunctions.set_nonleaves_prevalence_query())
+
+    @staticmethod
+    def set_occurrences_query():
+        return """MATCH (nonexistent:SpecificationNode) WHERE NOT (nonexistent)<-[:IS_SPECIFIED_BY]-(:ValueNode) SET nonexistent.occurrence = 0
+MATCH (sroot:SpecificationNode) WHERE NOT (sroot)<-[:CONTAINS]-()
+MATCH (v:ValueNode)-[:IS_SPECIFIED_BY]->(sroot) SET v.occurrence = 1 WITH collect(v) AS vn, sroot
+SET sroot.occurrence = size(vn) WITH sroot
+CALL(sroot){
+  MATCH (v:ValueNode)-[:IS_SPECIFIED_BY]->(s:SpecificationNode) WITH collect(v) AS vn, s
+  MATCH p = (sroot)-[:CONTAINS*]->(s) WITH vn, s, length(p) AS depth
+  RETURN vn, s, depth ORDER BY depth
 }
-CALL(paths, sleaf){
-  WITH size(paths) AS occurrence, sleaf
-  SET sleaf.occurrence = sleaf.occurrence + occurrence
+WITH vn, s
+CALL(vn, s){
+  MATCH (s)<-[:CONTAINS]-(mother_spec:SpecificationNode)
+  CALL(*){
+    OPTIONAL MATCH (mother_spec)<-[:ANNOTATES]-(a:AnnotationNode {annotation: 'This value is optional'})
+    CALL(mother_spec, a){
+      WHEN a IS :: NULL
+      THEN RETURN mother_spec.occurrence as occ
+      ELSE{
+        MATCH (mother_spec)<-[:IS_SPECIFIED_BY]-(mother_value:ValueNode)
+        RETURN reduce(occu = 0, m in collect(mother_value)| occu + m.occurrence) as occ
+      }
+    }
+    SET s.occurrence = occ 
+  }
+  WITH vn, mother_spec
+  CALL(mother_spec){
+    OPTIONAL MATCH (mother_spec)<-[:IS_SPECIFIED_BY]-(:ValueNode)-[r:CONTAINS]->(:ValueNode) WITH collect(r.listIndex) as edges_index
+    CALL(edges_index){
+      WHEN edges_index = []
+      THEN RETURN -1 AS edge_max
+      ELSE {
+        UNWIND edges_index AS edge_index
+        UNWIND edge_index as index
+        RETURN max(index) AS edge_max
+      }
+    }
+    RETURN edge_max
+  }
+  WITH vn, edge_max
+  UNWIND vn as vnode
+  CALL(vnode, edge_max){
+    WHEN edge_max = -1
+    THEN {
+      MATCH (mother:ValueNode)-[:CONTAINS]->(vnode)
+      WITH reduce(occu = 0, m in collect(mother)| occu + m.occurrence) as mothers_occ, vnode
+      SET vnode.occurrence = mothers_occ
+    }
+    ELSE{
+      WITH vnode
+      MATCH (mother:ValueNode)-[r:CONTAINS]->(vnode) WITH r.listIndex AS indexe, vnode, collect(mother) as mother
+      WITH indexe, vnode, reduce(occ = 0, m in mother|occ + m.occurrence) as occurrence_on_1_edge_index
+      let occ1edgeindex_positionned = [i in range(0, edge_max)|occurrence_on_1_edge_index*toInteger(i in indexe)]
+      with vnode, collect(occ1edgeindex_positionned) as all_occ_on_edges
+      SET vnode.occurrence_ordered = [i in range(0, edge_max)|reduce(acc = 0, j in range(0, size(all_occ_on_edges)-1)|acc + all_occ_on_edges[j][i])]
+      SET vnode.occurrence = reduce(acc = 0, m in vnode.occurrence_ordered|acc+m)
+    }
+  }
 }
-SET leaf.prevalence = toFloat(leaf.occurrence)/sleaf.occurrence"""
-        session.run(query)
-
+"""
 
     @staticmethod
-    def prevalence_without_optional_values(session, compute_with_occurrence = True, set_leaves_occurrences = False, set_in_db = False):
-        if set_leaves_occurrences: GraphFunctions.set_leaves_prevalence(session)
-        id_prevalence = {}
-        db_data = GraphFunctions.get_nodes_for_prevalence(session, compute_with_occurrence)
-        
-        if compute_with_occurrence:
-            harmonic_mean = power_mean_rational(-1)
-            for result in db_data:
-                node_element, associated_leaves = result
-                leaves_occurrence = list(map(lambda n: (n[0]['occurrence'], n[1]['occurrence']), associated_leaves))
-                id_prevalence[node_element['identifier']] = harmonic_mean(leaves_occurrence)
-        else:
-            harmonic_mean = power_mean(-1)
-            for result in db_data:
-                node_element, associated_leaves = result
-                leaves_prevalence = list(map(lambda n: n['prevalence'], associated_leaves))
-                id_prevalence[node_element['identifier']] = harmonic_mean(leaves_prevalence)
-        
-        if set_in_db: GraphFunctions.db_set_prevalence(session, id_prevalence)
-        return id_prevalence
+    def set_leaves_prevalence_query():
+        return """match (vn:ValueNode)-[:IS_SPECIFIED_BY]->(sn:SpecificationNode)
+SET vn.prevalence = toFloat(vn.occurrence)/sn.occurrence
+CALL(vn, sn){
+  WHEN NOT vn.occurrence_ordered IS ::NULL
+  THEN SET vn.prevalence_ordered = [i in range(0, size(vn.occurrence_ordered)-1)|toFloat(vn.occurrence_ordered[i])/sn.occurrence]
+}"""
 
     @staticmethod
-    def get_nodes_for_prevalence(session, compute_with_occurrence):
-        spec_node_option, ret_spec_node = ("-[:IS_SPECIFIED_BY]->(sleaf:SpecificationNode)", "collect([leaf, sleaf])") if compute_with_occurrence else ("", "collect(leaf)")
-        query = f"""MATCH (node:ValueNode) WHERE (node)-[:CONTAINS]->()
-MATCH (leaf:ValueNode){spec_node_option} WHERE NOT (leaf)-[:CONTAINS]->() AND (node)-[:CONTAINS*]->(leaf)
-RETURN node, {ret_spec_node}"""
-        return session.run(query)
-    
-    @staticmethod
-    def db_set_prevalence(session, id_prevalence):
-        setting_query = ""
-        counter = 0
-        for k, v in id_prevalence.items():
-            setting_query += f" WITH n{counter-1}\n"
-            setting_query += f"MATCH (n{counter} {{identifier: '{k}'}}) SET n{counter}.prevalence = {v}"
-            counter += 1
-        setting_query = setting_query[10:]
-        session.run(setting_query)
+    def set_nonleaves_prevalence_query():
+        return """match (mvn:ValueNode) WHERE (mvn)-[:CONTAINS]->()
+match (vleaf:ValueNode) WHERE (mvn)-[:CONTAINS*]->(vleaf) AND NOT (vleaf)-[:CONTAINS]->() WITH mvn, collect(vleaf.prevalence) as leaves_prevalence
+SET mvn.prevalence = TSM_Statistics(leaves_preavalence, -1)"""
 
 
 
