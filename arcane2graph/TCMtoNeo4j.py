@@ -23,11 +23,13 @@ class TCMtoDB:
     ################## Expanding db with a tcm ######################
     
     @staticmethod
-    def expand_neo4j_tsm(driver, db: str, tcm: TCM, return_score: bool = None)->None:
+    def expand_neo4j_tsm(driver, db: str, tcm: TCM, return_score: str = None)->None|float: #None, "dev", "user"/anything else
         TCMtoDB.setup_variables(tcm)
 
         with driver.session(database = db) as session:
             TCMtoDB.get_db_nodes_start(session, tcm)
+            if return_score:
+                return_score = TCMtoDB.compute_score(session, tcm.search_root(tcm.get_edges()), tcm, True if return_score == "dev" else False)
         root = tcm.search_root(tcm.get_edges())
         
         if root.get_identifier() in TCMtoDB.db_info["db_value_nodes"]:
@@ -39,6 +41,8 @@ class TCMtoDB:
         TCMtoDB.catch_missing_input(tcm)
         with driver.session(database = db) as session:
             TCMtoDB.process_final_queries(session)
+
+        if return_score: return return_score
 
     @staticmethod
     def process_option_value_to_neo4j(mother_specification_element: str|list|None, current_node: Node, tcm_edges: list[Edge])->None:
@@ -124,47 +128,56 @@ class TCMtoDB:
             if snode_path not in specs_path_of_tcm and msn_path in specs_path_of_tcm:
                 TCMtoDB.edge_creation(TCMtoDB.db_info["db_annotation_optional_node_id"], snode_id, "ANNOTATES")
 
+
+    ############ calculating TCM score ################
+
     @staticmethod
     def compute_score(session, node: Node, tcm: TCM, mode: bool) -> float: #True for dev mode, False for user mode
         if not mode : return 1 - TCMtoDB.compute_score(node, tcm, True)
 
-        return TCMtoDB.compute_score_bis(tcm.get_leaves(node))
+        return TCMtoDB.compute_score_bis(session, tcm.get_leaves(node))
 
     @staticmethod
     def compute_score_bis(session, leaf_nodes: list[Node]):
-        
-
         pass
 
 
 
     @staticmethod
     def compute_score_existing_leaf(node: Node) -> float:
-        node_id = node.get_identifier()
         node_value = node.val()
 
-        if isinstance(node_value, TCMtoDB.VALUES_GENRE["enumerate"]):   return TCMtoDB.db_info["db_value_nodes"][node_id][1] #TODO or 2 for ordered
+        if isinstance(node_value, TCMtoDB.VALUES_GENRE["enumerate"]):
+            node_id = node.get_identifier()
+            return TCMtoDB.db_info["db_value_nodes"][node_id][1] #TODO or 2 for ordered
         elif isinstance(node_value, TCMtoDB.VALUES_GENRE["range"]):     return 1.
 
     @staticmethod
     def compute_score_non_existing_leaf(session, node: Node) -> float:
-        node_id = node.get_identifier()
         node_value = node.val()
 
         if isinstance(node_value, TCMtoDB.VALUES_GENRE["enumerate"]):   return 0.
-        elif isinstance(node_value, TCMtoDB.VALUES_GENRE["range"]):     pass
+        elif isinstance(node_value, TCMtoDB.VALUES_GENRE["range"]):
+            node_path = node.get_path()
+            if node_path in TCMtoDB.db_info["db_spec_paths"]:
+                score, prevalence_closest = TCMtoDB.get_db_score_for_range_node(session, node_value, TCMtoDB.db_info["db_spec_paths"][node_path][0])
+                return score*prevalence_closest
+            else:
+                return 0.
+
 
             
 
     @staticmethod
     def get_db_score_for_range_node(session, node_value: float, spec_eid: str) -> float:
-        query = f"""MATCH (a:AnnotationNode)-[:ANNOTATES]->(spec:SpecificationNode)<-[:IS_SPECIFIED_BY]-(vn:ValueNode) WHERE elementId(spec) = {spec_eid} 
-WITH collect(vn.value ORDER BY vn.value) AS values_ordered, min(abs(vn - {node_value})), a.range AS range
-LET score_func = TSM_Statistics.score(values_ordered, range)
+        query = f"""MATCH (a:AnnotationNode)-[:ANNOTATES]->(spec:SpecificationNode) WHERE elementId(spec) = {spec_eid}
+MATCH (vn:ValueNode) WHERE (spec)<-[:IS_SPECIFIED_BY]-(vn) ORDER BY vn.value
+WITH collect(vn.value) AS values_ordered, apoc.agg.minItems(vn, abs(vn.value - {node_value})).items AS closest_node, a.range AS range
+LET score = TSM_Statistics.score({node_value}, values_ordered, range)
 
-RETURN ({node_value})
-"""#TODO how does it work for user defined functions ?
-        return session.run(query).single()[0]
+RETURN score, closest_node[0].prevalence
+"""
+        return session.run(query).single()
 
     
 
