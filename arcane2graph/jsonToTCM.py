@@ -1,5 +1,4 @@
 import os
-import sys
 import json
 import hashlib
 from numpy import format_float_scientific

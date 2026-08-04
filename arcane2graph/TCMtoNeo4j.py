@@ -1,7 +1,7 @@
 from arcane2graph.jsonToTCM import TCM, TYPES, Node, Edge
 from arcane2graph.TSMtoNeo4j import sanitize, STARTING_CHAR
 from neo4j import GraphDatabase
-import os, sys, re
+import os, re
 from functools import reduce
 from pydoc import locate
 

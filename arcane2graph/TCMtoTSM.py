@@ -1,5 +1,4 @@
 import os
-import sys
 from arcane2graph.jsonToTCM import TCM, Edge, TYPES, NODE_COMPOSITE_TYPES
 
 class SNode:

@@ -4,6 +4,7 @@ from pydoc import locate
 from arcane2graph.TSMtoNeo4j import sanitize
 from neo4j import GraphDatabase
 from arcane2graph.MeanFunctions import *
+import sys
 
 class GraphFunctions:
 
