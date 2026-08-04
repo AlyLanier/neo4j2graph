@@ -1,6 +1,6 @@
 import os
 import sys
-from jsonToTCM import TCM, Edge, TYPES, NODE_COMPOSITE_TYPES
+from arcane2graph.jsonToTCM import TCM, Edge, TYPES, NODE_COMPOSITE_TYPES
 
 class SNode:
     def __init__(self, name, stype):
@@ -261,8 +261,4 @@ def main():
     test_tsm = TSM(processed_json)
 
 if __name__ == "__main__":
-    args = sys.argv
-    if len(args) == 1: main()
-    elif args[1] == 'test':
-        import test_.test_TCMtoTSM as test
-        test.validate_tsm()
+    main()

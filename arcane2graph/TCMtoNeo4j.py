@@ -1,5 +1,5 @@
-from jsonToTCM import TCM, TYPES, Node, Edge
-from TSMtoNeo4j import sanitize, STARTING_CHAR
+from arcane2graph.jsonToTCM import TCM, TYPES, Node, Edge
+from arcane2graph.TSMtoNeo4j import sanitize, STARTING_CHAR
 from neo4j import GraphDatabase
 import os, sys, re
 from functools import reduce
@@ -382,8 +382,4 @@ def main():
         
 
 if __name__ == "__main__":
-    args = sys.argv
-    if len(args) == 1: main()
-    elif args[1] == 'test':
-        import test_.test_TCMtoNeo4j as test
-        test.validate_db_from_tcm()
+    main()

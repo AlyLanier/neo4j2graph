@@ -1,9 +1,9 @@
-from TCMtoTSM import TSM, VNode, SNode, Edge
-from jsonToTCM import *
+from arcane2graph.TCMtoTSM import TSM, VNode, SNode, Edge
+from arcane2graph.jsonToTCM import *
 from pydoc import locate
-from TSMtoNeo4j import sanitize
+from arcane2graph.TSMtoNeo4j import sanitize
 from neo4j import GraphDatabase
-from MeanFunctions import *
+from arcane2graph.MeanFunctions import *
 
 class GraphFunctions:
 

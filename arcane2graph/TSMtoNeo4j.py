@@ -1,8 +1,8 @@
 import os
 import sys
 from neo4j import GraphDatabase
-from TCMtoTSM import TSM
-from jsonToTCM import TCM
+from arcane2graph.TCMtoTSM import TSM
+from arcane2graph.jsonToTCM import TCM
 
 STARTING_CHAR = "a"
 
@@ -103,8 +103,5 @@ def main_populate():
 if __name__ == "__main__":
     args = sys.argv
     if len(args) == 1: main()
-    elif args[1] == 'test':
-        import test_.test_TSMtoNeo4j as test
-        test.validate_db_from_TSM()
     elif args[1] == 'populate':
         main_populate()

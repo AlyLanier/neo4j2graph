@@ -1,30 +1,30 @@
-from TSMtoNeo4j import *
+from arcane2graph.TSMtoNeo4j import *
 import os
-from Neo4jGraphFunctions import GraphFunctions as gf
-from test_.test_db_graphs import verify_db_tsm
-    
+from arcane2graph.Neo4jGraphFunctions import GraphFunctions as gf
+from arcane2graph.test_.test_db_graphs import verify_db_tsm
+import unittest
 
-def validate_db_from_TSM():
-    json_path = "arc_json/arc_json_tests"
-    processed_json = []
-    for filename in os.listdir(json_path):
-        if filename.endswith(".json") and filename != "Mahyco_test_Alyssia.json":
-            print(filename)
-            file_path = os.path.join(json_path, filename)
-            processed_json.append(TCM(file_path, 'mahyco'))
+class TestTSMtoNeo4J(unittest.TestCase):
 
-    tsm = TSM(processed_json)
-    tsm_for_neo4j = TSM_creation_query(tsm)
+    @classmethod
+    def setUpClass(cls):
+        cls.URI = "bolt://localhost:7687"
+        cls.AUTH = (os.getenv("NEO4J_USER_TESTS"), os.getenv("NEO4J_PASSWORD_TESTS"))
+        if not all(cls.AUTH): cls.AUTH = ("neo4j", "password")
+        cls.TSM = TSM([TCM(os.path.join("arc_json/arc_json_tests", filename), 'mahyco') for filename in os.listdir("arc_json/arc_json_tests") if filename.endswith(".json")])
+        return super().setUpClass()
 
+    @classmethod
+    def tearDownClass(cls):
+        del cls.TSM, cls.URI, cls.AUTH
+        return super().tearDownClass()
 
-    URI = "bolt://localhost:7687"
-    AUTH = ("neo4j", "password")
+    def test_validate_db_from_TSM(self):
+        tsm_for_neo4j = TSM_creation_query(self.TSM)
 
-    with GraphDatabase.driver(URI, auth=AUTH) as driver:
-        driver.verify_connectivity()
-        driver.execute_query("MATCH (p)\nDETACH DELETE p") # remove current graph
-        driver.execute_query(tsm_for_neo4j) # build graph here
-        result = driver.execute_query(gf.get_TSM_query())
-        verify_db_tsm(tsm, result) # verify if the tsm has been translated correctly into Neo4j
-
-    print("ALL tests validated")
+        with GraphDatabase.driver(self.URI, auth=self.AUTH) as driver:
+            driver.verify_connectivity()
+            driver.execute_query("MATCH (p)\nDETACH DELETE p") # remove current graph
+            driver.execute_query(tsm_for_neo4j) # build graph here
+            result = driver.execute_query(gf.get_TSM_query())
+            self.assertTrue(verify_db_tsm(self.TSM, result), "TSM has not been correctly translated to neo4j, blame the coder please") # verify if the tsm has been translated correctly into Neo4j

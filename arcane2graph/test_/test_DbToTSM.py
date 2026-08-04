@@ -1,19 +1,28 @@
-from Neo4jGraphFunctions import GraphFunctions
+from arcane2graph.Neo4jGraphFunctions import GraphFunctions
 from neo4j import GraphDatabase
-from test_.test_TCMtoTSM import test_tsm
+import os
+import unittest
 
-def validate_db(by_query = True):
-    URI = "bolt://localhost:7687"
-    AUTH = ("neo4j", "password")
-    DB_NAME = AUTH[0]
+class TestDB(unittest.TestCase):
 
-    with GraphDatabase.driver(URI, auth=AUTH) as driver:
-        driver.verify_connectivity()
+    @classmethod
+    def setUpClass(cls):
+        cls.URI = "bolt://localhost:7687"
+        cls.AUTH = (os.getenv("NEO4J_USER_TESTS"), os.getenv("NEO4J_PASSWORD_TESTS"))
+        if not all(cls.AUTH): cls.AUTH = ("neo4j", "password")
+        return super().setUpClass()
 
-        with driver.session(database = DB_NAME) as session:
-            if by_query:    db_validity = session.run(GraphFunctions.Db_Validity_query()).single()
-            else:           tsm = GraphFunctions.TSM_from_db(session)
-    
-    if by_query:    assert db_validity[0] == True
-    else:           test_tsm(tsm)
-    print('ALL tests validated')
+    @classmethod
+    def tearDownClass(cls):
+        del cls.URI, cls.AUTH
+        return super().tearDownClass()
+
+    def test_validate_db(self):
+       
+        with GraphDatabase.driver(self.URI, auth=self.AUTH) as driver:
+            driver.verify_connectivity()
+
+            with driver.session(database = self.AUTH[0]) as session:
+                db_validity = session.run(GraphFunctions.Db_Validity_query()).single()
+        
+        self.assertTrue(db_validity[0], "The database TSM does not complete the tests, there is a problem in it")

@@ -1,33 +1,31 @@
-from jsonToTCM import *
-from test_.test_graphs import *
+from arcane2graph.jsonToTCM import *
+from arcane2graph.test_.test_graphs import *
 import unittest
-from ddt import ddt, data
 
 #################### TESTS ######################
 
-def get_files():
-    return {os.path.join("arc_json/arc_json_tests", filename): TCM(filename) for filename in os.listdir("arc_json/arc_json_tests") if filename.endswith(".json")}
-                    
 
-@ddt
 class TestTCMCreation(unittest.TestCase):
-    
+
     @classmethod
     def setUpClass(cls):
-        json_path = "arc_json/arc_json_tests"
-        cls.processed_tcm = []
-        print(cls)
-        for filename in os.listdir(json_path):
-            if filename.endswith(".json"):
-                file_path = os.path.join(json_path, filename)
-                print(file_path)
-                cls.processed_tcm[file_path] = TCM(file_path, 'mahyco')
-                
-    @data(*get_files())
-    def test_structure(self, tcm_file):
-        tcm = TestTCMCreation.processed_tcm[tcm_file]
-        nodes, edges = tcm.get_model()
+        cls.TCMS = [TCM(os.path.join("arc_json/arc_json_tests", filename), 'mahyco') for filename in os.listdir("arc_json/arc_json_tests") if filename.endswith(".json")]
+        return super().setUpClass()
 
+    @classmethod
+    def tearDownClass(cls):
+        del cls.TCMS
+        return super().tearDownClass()
+
+    def test_tcms(self):
+        for tcm in self.TCMS:
+            self.structure_test(tcm)
+            self.validity_test(tcm)
+            self.acyclic_test(tcm)
+
+    def structure_test(self, tcm):
+        nodes, edges = tcm.get_model()
+        
         self.assertTrue(is_correct_node_types((nodes, Node)), "All nodes must be of type 'Node'")
         for node in nodes:
             self.assertNotEqual(node.val(), node._type, "A node should either have a value or a hidden type")
@@ -35,19 +33,17 @@ class TestTCMCreation(unittest.TestCase):
         self.assertTrue(is_correct_edge_types(edges, Edge, [lambda edge: isinstance(edge.source(), Node) and isinstance(edge.target(), Node)]), 
                         "All edges must be of type 'Edge', and all nodes at their ends must be of type 'Node'")
 
-    @data(*get_files())
-    def test_validity(self, tcm_file):
-        tcm = TestTCMCreation.processed_tcm[tcm_file]
+    def validity_test(self, tcm):
         nodes, edges = tcm.get_model()
-
         self.assertFalse(is_duplicate(nodes, edges), "There must not be duplicate nodes or edges")
         self.assertTrue(is_unique_root((nodes, edges)), "The graph must only have one root")
         self.assertTrue(is_nodes_in_one_edge((nodes, edges)), "All nodes must be in at least 1 edge and all nodes from edges are in the node list") 
         
-        for node in nodes: self.assertTrue(isinstance(node.val(), NODE_SIMPLE_TYPES) or node.get_type() in NODE_COMPOSITE_TYPES) # a node must have a value type in those 2 sets
+        for node in nodes: self.assertTrue(isinstance(node.val(), NODE_SIMPLE_TYPES) or node.get_type() in NODE_COMPOSITE_TYPES, 
+                                           f"A node must either have a simple value (i.e. the value must be one of these types : {NODE_SIMPLE_TYPES})\n or be a composite node (i.e. its virtual type must be one of these types : {NODE_COMPOSITE_TYPES})")
         for edge in edges:
-            self.assertIsNone(edge.source().val()) # an edge source is not a leaf
-            #TODO edge.source().get_type() in NODE_COMPOSITE_TYPES
+            self.assertIsNone(edge.source().val(), "The source node of an edge must be a composite node (i.e. have 'None' as a value)")
+            self.assertIn(edge.source().get_type(), NODE_COMPOSITE_TYPES, f"The source node of an edge must be a composite node (i.e. its virtual type must be one of these types : {NODE_COMPOSITE_TYPES})")
         
         self.assertTrue(is_all_different_edges(edges), "Two edges must not have the same source and target at the same time")
         self.assertTrue(is_unique_parent((nodes, edges)), "A node must only have one parent node")
@@ -56,40 +52,28 @@ class TestTCMCreation(unittest.TestCase):
         for node in nodes:
             if node.get_type() in NODE_COMPOSITE_TYPES:
                 children = tcm.find_children(node, edges)
-                self.assertNotEqual(len(children), 0)
+                self.assertNotEqual(len(children), 0, "A composite node must have at least 1 children")
                 children_names = set(map(lambda child: child.name(), children))
                 if node.get_type() == list:
-                    self.assertTrue(len(children_names) == 1 and node.name() in children_names)
+                    self.assertTrue(len(children_names) == 1 and node.name() in children_names, "A composite node of virtual type 'list' must have all its children have the same name as it")
                 elif node.get_type() == dict:
-                    self.assertEqual(len(children), len(children_names))
-        
+                    self.assertEqual(len(children), len(children_names), "A composite node of virtual type 'dict' must have all its children have a different name")
 
-    @data(*get_files())
-    def test_acyclic(self, tcm_file):
-        tcm = TestTCMCreation.processed_tcm[tcm_file]
-        nodes = tcm.get_nodes()
-        edges = tcm.get_edges()
-
-        # edge does not have the same source and target
-        for edge in edges:
-            self.assertNotEqual(edge.source(), edge.target())
+    def acyclic_test(self, tcm):
+        nodes, edges = tcm.get_model()
         
         # we know that :    there is exactly 1 root
         #                   each node only has 1 parent
         # so we just need to test for rings / if we follow the path from the root, 
         # we must catch all nodes and not find a seen_node
-        root = tcm.search_root(edges, start_edge = len(edges)//2)
+        root = tcm.search_root(edges)
         seen_nodes = [root]
-        TestTCMCreation.acyclic_rec(root, edges, seen_nodes)
-        self.assertEqual(len(seen_nodes), len(nodes))
+        self.acyclic_rec(root, edges, seen_nodes)
+        self.assertEqual(len(seen_nodes), len(nodes), "The graph must be acyclic")
 
-    @staticmethod
-    def acyclic_rec(node, edges, seen_nodes):
+    def acyclic_rec(self, node, edges, seen_nodes):
         node_children = TCM.find_children(node, edges)
         for child in node_children:
-            assert child not in seen_nodes
+            self.assertNotIn(child, seen_nodes, "A node has been found to be a duplicate")
             seen_nodes.append(child)
-            TestTCMCreation.acyclic_rec(child, edges, seen_nodes)
-
-    
-unittest.main(argv=['first-arg-is-ignored'], exit=False)
+            self.acyclic_rec(child, edges, seen_nodes)

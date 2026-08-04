@@ -1,4 +1,4 @@
-from jsonToTCM import *
+from arcane2graph.jsonToTCM import *
 
 def nodes_from_edges(edge_list):
     for edge in edge_list:
