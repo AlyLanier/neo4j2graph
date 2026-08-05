@@ -39,7 +39,7 @@ def verify_db_tsm(tsm, query_result):
     check_ids((db_vn, vn), (db_sn, sn), (db_ce, ce), (db_se, se))
     
 
-def validate_db_from_TSM():
+def validate_db_from_TSM(driver_arguments = None):
     json_path = "arc_json/arc_json_tests"
     processed_json = []
     for filename in os.listdir(json_path):
@@ -51,11 +51,13 @@ def validate_db_from_TSM():
     tsm = TSM(processed_json)
     tsm_for_neo4j = TSM_creation_query(tsm)
 
+    if driver_arguments is None:
+        URI = "bolt://localhost:7687"
+        AUTH = (os.getenv("NEO4J_USER"), os.getenv("NEO4J_PASSWORD"))
+    else:
+        URI, AUTH = driver_arguments
 
-    URI = "bolt://localhost:7687"
-    AUTH = ("neo4j", "password")
-
-    with GraphDatabase.driver(URI, auth=AUTH) as driver:
+    with GraphDatabase.driver(URI, auth=AUTH, encrypted=False) as driver:
         driver.verify_connectivity()
         driver.execute_query("MATCH (p)\nDETACH DELETE p") # remove current graph
         driver.execute_query(tsm_for_neo4j) # build graph here
