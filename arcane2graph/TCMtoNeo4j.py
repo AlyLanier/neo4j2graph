@@ -39,10 +39,10 @@ class TCMtoDB:
             TCMtoDB.process_final_queries(session)
 
     @staticmethod
-    def process_option_value_to_neo4j(mother_specification_element: str|list|None, current_node: Node, tcm_edges: list[Edge])->None:
+    def process_option_value_to_neo4j(mother_specification_element: str|list|None, current_node: Node, tcm_edges: list[Edge], _verbose = False)->None:
         if current_node.get_identifier() in TCMtoDB.db_info["db_value_nodes"]: return
         if current_node.get_identifier() in TCMtoDB.nodes_created: return
-        print(f"Node to add to the graph : {current_node}")
+        if _verbose: print(f"Node to add to the graph : {current_node}")
 
         db_sn_element = None
         if TCMtoDB.is_from_db(mother_specification_element):
@@ -366,19 +366,6 @@ def main():
             print("-------------------------------------")
         
     return
-
-
-    query = f"""MATCH (SNM:SpecificationNode)<-[:IS_SPECIFIED_BY]-(:ValueNode {{identifier: "a1566f82ecbad4341fdb52a472e4c5b1"}})
-            OPTIONAL MATCH (SN:SpecificationNode {{name: "name"}})<-[:CONTAINS]-(SNM)
-            RETURN SNM, SN
-            """
-    test = driver.execute_query(query)
-    print(test[0]) #records
-    print(test[0][0]) # first of records if multiple possibilities
-    print(test[0][0][0]) # first return value of query
-    print(test[0][0][0].element_id)
-    print(test[0][0][1])
-
         
 
 if __name__ == "__main__":
