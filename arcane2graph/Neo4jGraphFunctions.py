@@ -1,10 +1,17 @@
-from arcane2graph.TCMtoTSM import TSM, VNode, SNode, Edge
-from arcane2graph.jsonToTCM import *
+import sys
 from pydoc import locate
 from arcane2graph.TSMtoNeo4j import sanitize
 from neo4j import GraphDatabase
-from arcane2graph.MeanFunctions import *
-import sys
+
+try:
+    from arcane2graph.TCMtoTSM import TSM, VNode, SNode, Edge
+    from arcane2graph.jsonToTCM import *
+    from arcane2graph.MeanFunctions import *
+except:
+    from TCMtoTSM import TSM, VNode, SNode, Edge
+    from jsonToTCM import *
+    from MeanFunctions import *
+
 
 class GraphFunctions:
 

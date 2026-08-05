@@ -1,9 +1,14 @@
-from arcane2graph.jsonToTCM import TCM, TYPES, Node, Edge
-from arcane2graph.TSMtoNeo4j import sanitize, STARTING_CHAR
+import os, sys, re
 from neo4j import GraphDatabase
-import os, re
 from functools import reduce
 from pydoc import locate
+
+try:
+    from arcane2graph.jsonToTCM import TCM, TYPES, Node, Edge
+    from arcane2graph.TSMtoNeo4j import sanitize, STARTING_CHAR
+except:
+    from jsonToTCM import TCM, TYPES, Node, Edge
+    from TSMtoNeo4j import sanitize, STARTING_CHAR
 
 class TCMtoDB:
     @staticmethod
@@ -21,7 +26,7 @@ class TCMtoDB:
     ################## Expanding db with a tcm ######################
     
     @staticmethod
-    def expand_neo4j_tsm(driver, db: str, tcm: TCM)->None:
+    def expand_neo4j_tsm(driver, db: str, tcm: TCM, _verbose = False)->None:
         TCMtoDB.setup_variables(tcm)
 
         with driver.session(database = db) as session:
@@ -33,13 +38,13 @@ class TCMtoDB:
                 session.run(TCMtoDB.annotation_tcm_in_db_query(root.get_identifier()))
             return
 
-        TCMtoDB.process_option_value_to_neo4j(None, root, tcm.get_edges())
+        TCMtoDB.process_option_value_to_neo4j(None, root, tcm.get_edges(), _verbose)
         TCMtoDB.catch_missing_input(tcm)
         with driver.session(database = db) as session:
             TCMtoDB.process_final_queries(session)
 
     @staticmethod
-    def process_option_value_to_neo4j(mother_specification_element: str|list|None, current_node: Node, tcm_edges: list[Edge], _verbose = False)->None:
+    def process_option_value_to_neo4j(mother_specification_element: str|list|None, current_node: Node, tcm_edges: list[Edge], _verbose)->None:
         if current_node.get_identifier() in TCMtoDB.db_info["db_value_nodes"]: return
         if current_node.get_identifier() in TCMtoDB.nodes_created: return
         if _verbose: print(f"Node to add to the graph : {current_node}")
@@ -64,7 +69,7 @@ class TCMtoDB:
             child_id = edge_to_child.target().get_identifier()
             if child_id in TCMtoDB.db_info["db_value_nodes"]: child_ref_id = TCMtoDB.db_info["db_value_nodes"][child_id]
             else:
-                TCMtoDB.process_option_value_to_neo4j(new_msn_element, edge_to_child.target(), tcm_edges)
+                TCMtoDB.process_option_value_to_neo4j(new_msn_element, edge_to_child.target(), tcm_edges, _verbose)
                 child_ref_id = [STARTING_CHAR+child_id]
             TCMtoDB.edge_creation([STARTING_CHAR+current_node.get_identifier()], child_ref_id, "CONTAINS", edge_to_child.get_index())
 
@@ -366,7 +371,30 @@ def main():
             print("-------------------------------------")
         
     return
+
+def main_populate(verbose):
+    URI = "bolt://localhost:7687"
+    AUTH = ("neo4j", "password")
+    DB_NAME = AUTH[0]
+    json_path = "arc_json"
+    
+    files_to_consider = [os.path.join(json_path, filename) for filename in os.listdir(json_path) if filename.endswith(".json")]
+    with GraphDatabase.driver(URI, auth=AUTH) as driver:
+        driver.verify_connectivity()
+        driver.execute_query("MATCH (p)\nDETACH DELETE p")# remove current graph
+        for file_path in files_to_consider:
+            if verbose: print(file_path)
+            tcm = TCM(file_path, 'mahyco')
+            TCMtoDB.expand_neo4j_tsm(driver, DB_NAME, tcm, verbose)
+            if verbose: print("-------------------------------------")
         
+    return
+
+
 
 if __name__ == "__main__":
-    main()
+    args = sys.argv
+    if len(args) == 1: main()
+    elif args[1] == 'populate':
+        verbose = len(args) == 3 and args[2] == '-v'
+        main_populate(verbose)

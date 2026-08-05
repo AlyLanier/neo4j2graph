@@ -1,5 +1,6 @@
 import os
-from arcane2graph.jsonToTCM import TCM, Edge, TYPES, NODE_COMPOSITE_TYPES
+try:    from arcane2graph.jsonToTCM import TCM, Edge, TYPES, NODE_COMPOSITE_TYPES
+except: from jsonToTCM import TCM, Edge, TYPES, NODE_COMPOSITE_TYPES
 
 class SNode:
     def __init__(self, name, stype):

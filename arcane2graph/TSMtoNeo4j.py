@@ -1,8 +1,13 @@
 import os
 import sys
 from neo4j import GraphDatabase
-from arcane2graph.TCMtoTSM import TSM
-from arcane2graph.jsonToTCM import TCM
+
+try:
+    from arcane2graph.TCMtoTSM import TSM
+    from arcane2graph.jsonToTCM import TCM
+except:
+    from TCMtoTSM import TSM
+    from jsonToTCM import TCM
 
 STARTING_CHAR = "a"
 
