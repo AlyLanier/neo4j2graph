@@ -360,7 +360,8 @@ class TCM:
         annotations_to_add, annotations_to_del = [], []
         for ne_parent_node, ne_names in self.get_annotations("nonexistent_nodes").items():
             for ne_name in ne_names:
-                annotations_to_add.append(("nonexistent_nodes", ne_parent_node.get_identifier(), ne_name))
+                if ne_parent_node.get_identifier(): #if parent has not been integrated because it was null
+                    annotations_to_add.append(("nonexistent_nodes", ne_parent_node.get_identifier(), ne_name))
             annotations_to_del.append(ne_parent_node)
         for annotation in annotations_to_add:
             self.add_annotation(*annotation)
