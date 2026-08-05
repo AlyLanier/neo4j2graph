@@ -20,7 +20,8 @@ jobs:
         image: neo4j:latest
         options: >- 
           --name test
-          --health-cmd "cypher-shell -u neo4j -p password 'RETURN 1;' || exit 1"
+          --health-cmd "cypher-shell -u neo4j -p ${{ matrix.}} 'RETURN 1;' || exit 1"
+          --health-start-period 15s
           --health-interval 2s
           --health-timeout 5s
           --health-retries 10
@@ -48,4 +49,5 @@ jobs:
         run: pip install -r requirements.txt
         
       - name: tests
+        
         run: python3.14 -m unittest discover arcane2graph/test_ -v
