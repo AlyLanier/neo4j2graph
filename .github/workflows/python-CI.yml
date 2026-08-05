@@ -48,4 +48,4 @@ jobs:
         run: pip install -r requirements.txt
         
       - name: tests
-        run: python3.14 -m unittest discover -v
+        run: python3.14 -m unittest discover arcane2graph/test_ -v
