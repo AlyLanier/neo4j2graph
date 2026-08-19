@@ -142,7 +142,7 @@ class TCM:
 
     def nodify(self, data, data_key):
         data = TCM.find_real_data(data, data_key)
-        path = data_key
+        path = 'root'
         root = self.create_node("root", None, path)
         nodes = [root]
         edges = []
@@ -389,7 +389,8 @@ class TCM:
         annotations_to_add, annotations_to_del = [], []
         for ne_parent_node, ne_names in self.get_annotations("nonexistent_nodes").items():
             for ne_name in ne_names:
-                annotations_to_add.append(("nonexistent_nodes", ne_parent_node.get_identifier(), ne_name))
+                if ne_parent_node.get_identifier(): #if parent has not been integrated because it was null
+                    annotations_to_add.append(("nonexistent_nodes", ne_parent_node.get_identifier(), ne_name))
             annotations_to_del.append(ne_parent_node)
         for annotation in annotations_to_add:
             self.add_annotation(*annotation)
@@ -420,8 +421,4 @@ def main():
 
 
 if __name__ == "__main__":
-    args = sys.argv
-    if len(args) == 1: main()
-    elif args[1] == 'test':
-        import tests.test_json_to_tcm as test
-        test.validate_tcm()
+    main()
