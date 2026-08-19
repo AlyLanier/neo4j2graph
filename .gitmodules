@@ -1,0 +1,3 @@
+[submodule "neo4j-UserDefinedFunctions-Mean"]
+	path = neo4j-UserDefinedFunctions-Mean
+	url = https://github.com/AlyLanier/neo4j-UserDefinedFunctions-Mean.git
