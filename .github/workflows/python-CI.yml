@@ -47,12 +47,5 @@ jobs:
       - name: Install Dependencies
         run: pip install -e ".[dev]"
 
-      - name: test json_to_tcm
-        run: python -m panoramix.json_to_tcm test
-
-      - name: test TCMtoTSM
-        run: python -m panoramix.tcm_to_tsm test
-
-      - name: test TSMtoDB
-        run: |
-          python -m panoramix.tsm_to_neo4j test
+      - name: run tests
+        run: python -m unittest discover -s tests -v
