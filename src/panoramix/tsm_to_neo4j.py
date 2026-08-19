@@ -103,8 +103,5 @@ def main_populate():
 if __name__ == "__main__":
     args = sys.argv
     if len(args) == 1: main()
-    elif args[1] == 'test':
-        import tests.test_3_tsm_to_neo4j as test
-        test.validate_db_from_TSM()
     elif args[1] == 'populate':
         main_populate()

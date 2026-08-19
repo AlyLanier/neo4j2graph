@@ -1,5 +1,4 @@
 import os
-import sys
 from panoramix.json_to_tcm import TCM, Edge, TYPES, NODE_COMPOSITE_TYPES
 
 class SNode:
@@ -261,8 +260,4 @@ def main():
     test_tsm = TSM(processed_json)
 
 if __name__ == "__main__":
-    args = sys.argv
-    if len(args) == 1: main()
-    elif args[1] == 'test':
-        import tests.test_2_tcm_to_tsm as test
-        test.validate_tsm()
+    main()

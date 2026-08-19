@@ -247,18 +247,6 @@ class TCM:
         if k in self.annotations[annotation_type]:  self.annotations[annotation_type][k].append(v)
         else:                                       self.annotations[annotation_type][k] = [v]
 
-    def get_nodes_per_depth(self, reverse = False):
-        edges = self.get_edges()
-        ret = [[TCM.search_root(self.get_edges())]]
-        for prev_depth in ret:
-            new_depth = []
-            for node in prev_depth:
-                new_depth += TCM.find_children(node, edges)
-            if new_depth != []: ret.append(new_depth)
-
-        if reverse: ret.reverse()
-        return ret
-
     def get_leaves(self, source_node):
         edges = self.get_edges()
         ret = []

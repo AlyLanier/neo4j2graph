@@ -1,11 +1,10 @@
-from panoramix.json_to_tcm import TCM, TYPES, Node, Edge
-from panoramix.tsm_to_neo4j import sanitize, TSM_creation_query, STARTING_CHAR
-from panoramix.tcm_to_tsm import TSM
+import os, sys, re
 from neo4j import GraphDatabase
-import os, sys
 from functools import reduce
 from pydoc import locate
 
+from panoramix.json_to_tcm import TCM, TYPES, Node, Edge
+from panoramix.tsm_to_neo4j import sanitize, STARTING_CHAR
 class TCMtoDB:
     VALUES_GENRE = {"enumeration": (bool, int, str), "range": (float,)}
 
@@ -15,6 +14,7 @@ class TCMtoDB:
         TCMtoDB.final_queries = {"node_matching" : {}, "node_creation" : [], "edge_creation" : [], "type_change" : {}}
         TCMtoDB.db_info = {"db_value_nodes" : {}, "db_specification_nodes" : {}, "db_spec_paths" : {}, 
                            "db_optional_nodes" : {}, "db_annotation_optional_node_id" : None}
+        TCMtoDB.unallowed_tokens = {}
         TCMtoDB.nodes_created = []
         TCMtoDB.path_of_s_nodes_to_create = []
         TCMtoDB.tcm_annotations = tcm.get_annotations()
@@ -23,7 +23,7 @@ class TCMtoDB:
     ################## Expanding db with a tcm ######################
     
     @staticmethod
-    def expand_neo4j_tsm(driver, db: str, tcm: TCM, return_score: str = None)->None|float: #None, "dev", "user"/anything else
+    def expand_neo4j_tsm(driver, db: str, tcm: TCM, return_score: str = None, _verbose = False)->None|float: #None, "dev", "user"/anything else
         TCMtoDB.setup_variables(tcm)
 
         with driver.session(database = db) as session:
@@ -37,7 +37,7 @@ class TCMtoDB:
                 session.run(TCMtoDB.annotation_tcm_in_db_query(root.get_identifier()))
             return
 
-        TCMtoDB.process_option_value_to_neo4j(None, root, tcm.get_edges())
+        TCMtoDB.process_option_value_to_neo4j(None, root, tcm.get_edges(), _verbose)
         TCMtoDB.catch_missing_input(tcm)
         with driver.session(database = db) as session:
             TCMtoDB.process_final_queries(session)
@@ -45,10 +45,10 @@ class TCMtoDB:
         if return_score: return return_score
 
     @staticmethod
-    def process_option_value_to_neo4j(mother_specification_element: str|list|None, current_node: Node, tcm_edges: list[Edge])->None:
+    def process_option_value_to_neo4j(mother_specification_element: str|list|None, current_node: Node, tcm_edges: list[Edge], _verbose)->None:
         if current_node.get_identifier() in TCMtoDB.db_info["db_value_nodes"]: return
         if current_node.get_identifier() in TCMtoDB.nodes_created: return
-        print(f"Node to add to the graph : {current_node}")
+        if _verbose: print(f"Node to add to the graph : {current_node}")
 
         db_sn_element = None
         if TCMtoDB.is_from_db(mother_specification_element):
@@ -70,7 +70,7 @@ class TCMtoDB:
             child_id = edge_to_child.target().get_identifier()
             if child_id in TCMtoDB.db_info["db_value_nodes"]: child_ref_id = TCMtoDB.db_info["db_value_nodes"][child_id][0]
             else:
-                TCMtoDB.process_option_value_to_neo4j(new_msn_element, edge_to_child.target(), tcm_edges)
+                TCMtoDB.process_option_value_to_neo4j(new_msn_element, edge_to_child.target(), tcm_edges, _verbose)
                 child_ref_id = [STARTING_CHAR+child_id]
             TCMtoDB.edge_creation([STARTING_CHAR+current_node.get_identifier()], child_ref_id, "CONTAINS", edge_to_child.get_index())
 
@@ -113,8 +113,7 @@ class TCMtoDB:
                         
     @staticmethod
     def create_nonexistent_node(current_node: Node, mother_node, node_name: str):
-        identifier = "s" + current_node.get_identifier()
-        identifier = "s" + str(id(identifier))+identifier
+        identifier = "s" + current_node.get_identifier()+TCMtoDB.sanitize_name(node_name)
         TCMtoDB.node_creation(identifier, node_name, 'bool')
         TCMtoDB.edge_creation(mother_node, [identifier], "CONTAINS")
         TCMtoDB.edge_creation(TCMtoDB.db_info["db_annotation_optional_node_id"], [identifier], "ANNOTATES")
@@ -123,11 +122,27 @@ class TCMtoDB:
     def catch_missing_input(tcm):
         specs_path_of_db = TCMtoDB.db_info["db_spec_paths"]
         specs_path_of_tcm = set(map(lambda x: x.get_path(), tcm.get_nodes()))
+
+        for mother_id, list_non_existent_child_names in TCMtoDB.tcm_annotations["nonexistent_nodes"].items():
+            mn = TCM.find_node_from_hash(tcm.get_nodes(), mother_id)
+            for child_name in list_non_existent_child_names:
+                specs_path_of_tcm.add(mn.get_path()+'.'+child_name)
+
         for snode_path in specs_path_of_db:
             snode_id, msn_path = specs_path_of_db[snode_path]
+            if msn_path in TCMtoDB.db_info["db_optional_nodes"] and snode_path[len(msn_path)+1:] in TCMtoDB.db_info["db_optional_nodes"][msn_path]: continue
             if snode_path not in specs_path_of_tcm and msn_path in specs_path_of_tcm:
                 TCMtoDB.edge_creation(TCMtoDB.db_info["db_annotation_optional_node_id"], snode_id, "ANNOTATES")
 
+    @staticmethod
+    def sanitize_name(name: str) -> str:
+        return re.sub('\\W', TCMtoDB.unallowed_repl, name)
+
+    @staticmethod
+    def unallowed_repl(match_obj):
+        unallowed_char = match_obj.group(0)
+        if unallowed_char not in TCMtoDB.unallowed_tokens: TCMtoDB.unallowed_tokens[unallowed_char] = str(len(TCMtoDB.unallowed_tokens))
+        return TCMtoDB.unallowed_tokens[unallowed_char]
 
     ############ calculating TCM score ################
 
@@ -420,10 +435,7 @@ def main():
 
     for tcm in processed_json:
         TCMtoDB.compute_score(tcm, False)
-
-    return
     
-
     with GraphDatabase.driver(URI, auth=AUTH) as driver:
         driver.verify_connectivity()
         driver.execute_query("MATCH (p)\nDETACH DELETE p")# remove current graph
@@ -433,23 +445,29 @@ def main():
         
     return
 
-
-    query = f"""MATCH (SNM:SpecificationNode)<-[:IS_SPECIFIED_BY]-(:ValueNode {{identifier: "a1566f82ecbad4341fdb52a472e4c5b1"}})
-            OPTIONAL MATCH (SN:SpecificationNode {{name: "name"}})<-[:CONTAINS]-(SNM)
-            RETURN SNM, SN
-            """
-    test = driver.execute_query(query)
-    print(test[0]) #records
-    print(test[0][0]) # first of records if multiple possibilities
-    print(test[0][0][0]) # first return value of query
-    print(test[0][0][0].element_id)
-    print(test[0][0][1])
-
+def main_populate(verbose):
+    URI = "bolt://localhost:7687"
+    AUTH = ("neo4j", "password")
+    DB_NAME = AUTH[0]
+    json_path = "arc_json"
+    
+    files_to_consider = [os.path.join(json_path, filename) for filename in os.listdir(json_path) if filename.endswith(".json")]
+    with GraphDatabase.driver(URI, auth=AUTH) as driver:
+        driver.verify_connectivity()
+        driver.execute_query("MATCH (p)\nDETACH DELETE p")# remove current graph
+        for file_path in files_to_consider:
+            if verbose: print(file_path)
+            tcm = TCM(file_path, 'mahyco')
+            TCMtoDB.expand_neo4j_tsm(driver, DB_NAME, tcm, verbose)
+            if verbose: print("-------------------------------------")
         
+    return
+
+
 
 if __name__ == "__main__":
     args = sys.argv
     if len(args) == 1: main()
-    elif args[1] == 'test':
-        import tests.test_4_tcm_to_neo4j as test
-        test.validate_db_from_tcm()
+    elif args[1] == 'populate':
+        verbose = len(args) == 3 and args[2] == '-v'
+        main_populate(verbose)
