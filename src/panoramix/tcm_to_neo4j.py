@@ -3,8 +3,13 @@ from neo4j import GraphDatabase
 from functools import reduce
 from pydoc import locate
 
-from panoramix.json_to_tcm import TCM, TYPES, Node, Edge
-from panoramix.tsm_to_neo4j import sanitize, STARTING_CHAR
+try:
+    from panoramix.json_to_tcm import TCM, TYPES, Node, Edge
+    from panoramix.tsm_to_neo4j import sanitize, STARTING_CHAR
+except:
+    from src.panoramix.json_to_tcm import TCM, TYPES, Node, Edge
+    from src.panoramix.tsm_to_neo4j import sanitize, STARTING_CHAR
+
 class TCMtoDB:
     VALUES_GENRE = {"enumeration": (bool, int, str), "range": (float,)}
 

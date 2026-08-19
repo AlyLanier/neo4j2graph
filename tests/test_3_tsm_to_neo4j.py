@@ -1,4 +1,4 @@
-from panoramix.tcm_to_tsm import *
+from src.panoramix.tcm_to_tsm import *
 from tests.test_graphs import *
 
 from itertools import combinations

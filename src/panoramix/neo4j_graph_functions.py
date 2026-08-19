@@ -1,9 +1,16 @@
-from panoramix.tcm_to_tsm import TSM, VNode, SNode, Edge
-from panoramix.json_to_tcm import *
 from pydoc import locate
-from panoramix.tsm_to_neo4j import sanitize
 from neo4j import GraphDatabase
-from panoramix.mean_functions import *
+
+try:
+    from panoramix.json_to_tcm import *
+    from panoramix.tcm_to_tsm import TSM, VNode, SNode, Edge
+    from panoramix.tsm_to_neo4j import sanitize
+    from panoramix.mean_functions import *
+except:
+    from src.panoramix.json_to_tcm import *
+    from src.panoramix.tcm_to_tsm import TSM, VNode, SNode, Edge
+    from src.panoramix.tsm_to_neo4j import sanitize
+    from src.panoramix.mean_functions import *
 
 class GraphFunctions:
 

@@ -1,6 +1,6 @@
-from panoramix.tcm_to_neo4j import *
-from panoramix.tcm_to_tsm import TSM
-from panoramix.neo4j_graph_functions import GraphFunctions as gf
+from src.panoramix.tcm_to_neo4j import *
+from src.panoramix.tcm_to_tsm import TSM
+from src.panoramix.neo4j_graph_functions import GraphFunctions as gf
 
 from tests.test_db_graphs import verify_db_tsm
 

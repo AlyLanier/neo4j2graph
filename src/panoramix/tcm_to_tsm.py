@@ -1,5 +1,9 @@
 import os
-from panoramix.json_to_tcm import TCM, Edge, TYPES, NODE_COMPOSITE_TYPES
+
+try:
+    from panoramix.json_to_tcm import TCM, Edge, TYPES, NODE_COMPOSITE_TYPES
+except:
+    from src.panoramix.json_to_tcm import TCM, Edge, TYPES, NODE_COMPOSITE_TYPES
 
 class SNode:
     def __init__(self, name, stype):

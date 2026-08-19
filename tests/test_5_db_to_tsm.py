@@ -1,4 +1,4 @@
-from panoramix.neo4j_graph_functions import GraphFunctions
+from src.panoramix.neo4j_graph_functions import GraphFunctions
 from neo4j import GraphDatabase
 
 import os

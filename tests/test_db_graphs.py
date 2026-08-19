@@ -1,4 +1,4 @@
-from panoramix.tcm_to_tsm import VNode, SNode, Edge
+from src.panoramix.tcm_to_tsm import VNode, SNode, Edge
 import neo4j.graph as ng
 
 def to_identifiers(*lists):

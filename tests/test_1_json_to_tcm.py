@@ -1,4 +1,4 @@
-from panoramix.json_to_tcm import *
+from src.panoramix.json_to_tcm import *
 from tests.test_graphs import *
 import unittest
 
