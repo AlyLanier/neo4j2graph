@@ -45,14 +45,14 @@ jobs:
           cache: 'pip'
           
       - name: Install Dependencies
-        run: pip install -r requirements.txt
-        
-      - name: test jsonToTCM
-        run: python3.14 arcane2graph/jsonToTCM.py test
-        
+        run: pip install -e ".[dev]"
+
+      - name: test json_to_tcm
+        run: python -m panoramix.json_to_tcm test
+
       - name: test TCMtoTSM
-        run: python3.14 arcane2graph/TCMtoTSM.py test
-        
+        run: python -m panoramix.tcm_to_tsm test
+
       - name: test TSMtoDB
         run: |
-          python3.14 arcane2graph/TSMtoNeo4j.py test bolt://localhost:7687 ${{ env.NEO4J_USER }} ${{ env.NEO4J_PASSWORD }}
+          python -m panoramix.tsm_to_neo4j test
