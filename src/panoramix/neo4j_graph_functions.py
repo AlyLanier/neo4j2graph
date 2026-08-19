@@ -329,7 +329,7 @@ if __name__ == "__main__":
     args = sys.argv
     if len(args) == 1: main()
     elif args[1] == 'test':
-        import tests.test_db_to_tsm as test
+        import tests.test_5_db_to_tsm as test
         test.validate_db()
     elif args[1] == 'prevalence':
         URI = "bolt://localhost:7687"
