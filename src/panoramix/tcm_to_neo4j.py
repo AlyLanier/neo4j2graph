@@ -215,8 +215,8 @@ RETURN score, closest_node[0].prevalence
         identifiers = list(set(map(lambda x: x.get_identifier(), tcm.get_nodes())))
 
         query = f"""WITH [{str(identifiers)[1:-1]}] AS identifiers UNWIND identifiers AS ident
-#OPTIONAL MATCH (v:ValueNode {{identifier: ident}})
-#RETURN ident, elementId(v) AS e_id"""
+OPTIONAL MATCH (v:ValueNode {{identifier: ident}})
+RETURN ident, elementId(v) AS e_id"""
 
         #query = f"""WITH [{str(identifiers)[1:-1]}] AS identifiers UNWIND identifiers AS ident
 #OPTIONAL MATCH (v:ValueNode {{identifier: ident}})
