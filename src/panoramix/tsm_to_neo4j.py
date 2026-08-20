@@ -3,11 +3,11 @@ import sys
 from neo4j import GraphDatabase
 
 try:
-    from panoramix.tcm_to_tsm import TSM
-    from panoramix.json_to_tcm import TCM
-except:
     from src.panoramix.tcm_to_tsm import TSM
     from src.panoramix.json_to_tcm import TCM
+except:
+    from panoramix.tcm_to_tsm import TSM
+    from panoramix.json_to_tcm import TCM
 
 STARTING_CHAR = "a"
 
