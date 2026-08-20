@@ -28,9 +28,13 @@ def is_correct_node_types(*node_list_and_types):
 def is_correct_edge_types(edge_list, edge_type, additional_conditions = []):
     types = format_types_isinstance(edge_type)
     for edge in edge_list:
-        if not isinstance(edge, types): return False
+        if not isinstance(edge, types): 
+            print(f"the edge {edge} is of type {type(edge)} but expected it to be in {types}")
+            return False
         for condition in additional_conditions:
-            if not condition(edge): return False
+            if not condition(edge): 
+                print(f"Nodes are supposed to be either SNodes or VNodes, but are {edge.source(), edge.target()} of types {type(edge.source()), type(edge.target())}")
+                return False
     return True
 
 def is_duplicate(*lists):
