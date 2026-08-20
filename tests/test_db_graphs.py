@@ -33,7 +33,6 @@ def check_ids(*lists):
 
 def verify_db_tsm(tsm, query_result):
     vn, sn, ce, se = to_identifiers(*tsm.get_model())
-    print([e for e in query_result[0][0]])
     db_vn, db_sn, db_ce, db_se = to_identifiers(*[e for e in query_result[0][0]])
 
     ret = len(vn) == len(db_vn) and len(sn) == len(db_sn) and len(ce) == len(db_ce) and len(se) == len(db_se)
