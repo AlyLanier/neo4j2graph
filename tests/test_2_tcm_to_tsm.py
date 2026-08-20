@@ -28,6 +28,10 @@ class TestTCMtoTSM(unittest.TestCase):
 
     def structure_test(self, tsm):
         vn, sn, ce, se = tsm.get_model()
+        print(vn)
+        print(sn)
+        print(ce)
+        print(se)
         self.assertTrue(is_correct_node_types((vn, VNode), (sn, SNode)), "Value nodes must be of type 'VNode' and Specification nodes must be of type 'SNode'")
         self.assertTrue(is_correct_edge_types(ce, Edge, [lambda edge: isinstance(edge.source(), (VNode, SNode)), lambda edge: type(edge.source()) == type(edge.target())]), 
                         "Containment edges must be of type 'Edge' and their ends must be of the same type, being either 'VNode' or 'SNode'")
