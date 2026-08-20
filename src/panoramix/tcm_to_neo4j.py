@@ -4,11 +4,11 @@ from functools import reduce
 from pydoc import locate
 
 try:
-    from panoramix.json_to_tcm import TCM, TYPES, Node, Edge
-    from panoramix.tsm_to_neo4j import sanitize, STARTING_CHAR
-except:
     from src.panoramix.json_to_tcm import TCM, TYPES, Node, Edge
     from src.panoramix.tsm_to_neo4j import sanitize, STARTING_CHAR
+except:
+    from panoramix.json_to_tcm import TCM, TYPES, Node, Edge
+    from panoramix.tsm_to_neo4j import sanitize, STARTING_CHAR
 
 class TCMtoDB:
     VALUES_GENRE = {"enumeration": (bool, int, str), "range": (float,)}
@@ -213,11 +213,18 @@ RETURN score, closest_node[0].prevalence
     @staticmethod
     def already_existing_value_nodes(session, tcm:TCM)-> dict[str, str]:
         identifiers = list(set(map(lambda x: x.get_identifier(), tcm.get_nodes())))
+
         query = f"""WITH [{str(identifiers)[1:-1]}] AS identifiers UNWIND identifiers AS ident
 OPTIONAL MATCH (v:ValueNode {{identifier: ident}})
-RETURN ident, elementId(v) AS e_id, v.prevalence, v.prevalence_ordered"""
+RETURN ident, elementId(v) AS e_id"""
+
+        #query = f"""WITH [{str(identifiers)[1:-1]}] AS identifiers UNWIND identifiers AS ident
+#OPTIONAL MATCH (v:ValueNode {{identifier: ident}})
+#RETURN ident, elementId(v) AS e_id, v.prevalence, v.prevalence_ordered"""
         query_results = session.run(query)
-        return {ident: (element_id, prev, prev_ord) for ident, element_id, prev, prev_ord in query_results if element_id is not None}
+
+        return {ident: (element_id, ) for ident, element_id in query_results if element_id is not None}
+        #return {ident: (element_id, prev, prev_ord) for ident, element_id, prev, prev_ord in query_results if element_id is not None}
 
     @staticmethod
     def get_db_specification_nodes(session)->dict:
