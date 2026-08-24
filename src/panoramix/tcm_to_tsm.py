@@ -1,57 +1,57 @@
 import os
 
 try:
-    from src.panoramix.json_to_tcm import TCM, Edge, TYPES, NODE_COMPOSITE_TYPES
+    from src.panoramix.json_to_tcm import TCM, Node, Edge, TYPES, NODE_COMPOSITE_TYPES
 except:
-    from panoramix.json_to_tcm import TCM, Edge, TYPES, NODE_COMPOSITE_TYPES
+    from panoramix.json_to_tcm import TCM, Node, Edge, TYPES, NODE_COMPOSITE_TYPES
 
 class SNode:
-    def __init__(self, name, stype):
+    def __init__(self, name: str, stype: type) -> None:
         self.n = name
         self.t = stype
     
-    def __repr__(self):
+    def __repr__(self) -> str:
         return f"SN({self.name()}, {self.stype_name()})"
     
-    def get_identifier(self): #for neo4j
+    def get_identifier(self) -> int: #for neo4j
         return id(self)
     
-    def name(self):
+    def name(self) -> str:
         return self.n
 
-    def stype(self):
+    def stype(self) -> type:
         return self.t
     
-    def stype_name(self):
+    def stype_name(self) -> str:
         return self.t.__name__
 
-    def set_stype(self, t):
+    def set_stype(self, t: type) -> None:
         self.t = t
     
 class VNode:
-    def __init__(self, identifier, value):
+    def __init__(self, identifier: str, value: bool|int|float|str|None) -> None:
         self.i = identifier
         self.v = value
     
-    def __repr__(self):
+    def __repr__(self) -> str:
         return f"VN({self.val()})"
     
-    def corresponds_to(self, other):
+    def corresponds_to(self, other: VNode) -> bool:
         return self.get_identifier() == other.get_identifier()
     
-    def get_identifier(self):
+    def get_identifier(self) -> str:
         return self.i
 
-    def val(self):
+    def val(self) -> bool|int|float|str|None:
         return self.v
     
-    def cast(self, typ):
+    def cast(self, typ: type) -> None:
         if self.val() is None: return
         self.v = typ(self.val())
 
 class TSM:
 
-    def __init__(self, test_case_models = [], v_nodes = [], s_nodes = [], c_edges = [], s_edges = [], annotations = {"filenames": {}, "nonexistent_nodes": {}, "optional_nodes": {}}):
+    def __init__(self, test_case_models: list[TCM] = [], v_nodes: list[VNode] = [], s_nodes: list[SNode] = [], c_edges:list[Edge] = [], s_edges:list[Edge] = [], annotations: dict[str, dict] = {"filenames": {}, "nonexistent_nodes": {}, "optional_nodes": {}}) -> None:
         self.v_nodes, self.s_nodes, self.c_edges, self.s_edges = v_nodes, s_nodes, c_edges, s_edges
         self.annotations = annotations
         for test_case in test_case_models:
@@ -59,40 +59,40 @@ class TSM:
     
     ################### getters & list appends ###################
 
-    def get_model(self):
+    def get_model(self) -> tuple[list[VNode], list[SNode], list[Edge], list[Edge]]:
         return self.get_value_nodes(), self.get_specification_nodes(), self.get_containment_edges(), self.get_specification_edges()
 
-    def get_value_nodes(self):
+    def get_value_nodes(self) -> list[VNode]:
         return self.v_nodes
     
-    def add_value_node(self, new_node):
+    def add_value_node(self, new_node: VNode) -> None:
         self.v_nodes.append(new_node)
     
-    def get_specification_nodes(self):
+    def get_specification_nodes(self) -> SNode:
         return self.s_nodes
     
-    def add_specification_node(self, new_node, v_id = None, v_parent_id = None):
+    def add_specification_node(self, new_node: SNode, v_id: str = None, v_parent_id: str = None) -> None:
         if v_parent_id is not None and v_id is not None: self.process_optional_spec(new_node, v_id, v_parent_id)
         self.s_nodes.append(new_node)
 
-    def get_containment_edges(self):
+    def get_containment_edges(self) -> Edge:
         return self.c_edges
     
-    def add_containment_edge(self, src, tgt, index = None):
+    def add_containment_edge(self, src: VNode|SNode, tgt: VNode|SNode, index: list[int]|None = None) -> None:
         equal_edge = TCM.find_edges(self.get_containment_edges(), src, tgt)
         if equal_edge == []:    self.c_edges.append(TSM.create_edge(src, tgt, index))
-        else:                   equal_edge[0].concat_index(index)
+        elif index is not None: equal_edge[0].concat_index(index)
     
-    def get_specification_edges(self):
+    def get_specification_edges(self) -> list[Edge]:
         return self.s_edges
     
-    def add_specification_edge(self, src, tgt):
+    def add_specification_edge(self, src: VNode, tgt: SNode) -> None:
         self.s_edges.append(TSM.create_edge(src, tgt))
     
-    def get_annotations(self):
+    def get_annotations(self) -> dict[str, dict]:
         return self.annotations
     
-    def add_annotation(self, annotation_type, key, value):
+    def add_annotation(self, annotation_type: str, key: str, value: any) -> None:
         tsm_annotations = self.get_annotations()
         if annotation_type not in tsm_annotations: raise Exception('wrong key') #TODO
 
@@ -103,46 +103,46 @@ class TSM:
         else:
             self.annotations[annotation_type][key] = value
 
-    def get_containment_value_edges(self):
+    def get_containment_value_edges(self) -> list[Edge]:
         return [edge for edge in self.get_containment_edges() if isinstance(edge.source(), VNode)]
     
-    def get_containment_specification_edges(self):
+    def get_containment_specification_edges(self) -> list[Edge]:
         return [edge for edge in self.get_containment_edges() if isinstance(edge.source(), SNode)]
     
 
     ############### Create node or edge #######################
     
     @staticmethod
-    def create_s_node(name, stype):
+    def create_s_node(name: str, stype: type) -> SNode:
         return SNode(name, stype)
 
     @staticmethod
-    def create_v_node(ident, value):
+    def create_v_node(ident: str, value: bool|int|float|str|None) -> VNode:
         return VNode(ident, value)
 
     @staticmethod
-    def create_edge(src, tgt, index = None):
+    def create_edge(src: VNode|SNode, tgt: VNode|SNode, index: list[int]|None = None) -> Edge:
         return Edge(src, tgt, index)
     
 
     ################ SPEC binary relation ##################
     
-    def spec(self, node):
+    def spec(self, node: VNode) -> SNode:
         return TCM.find_node_from_edge(self.get_specification_edges(), node, True)
     
-    def spec_multi(self, *v_nodes):
+    def spec_multi(self, *v_nodes: list[VNode]) -> list[SNode]:
         res = []
         for node in v_nodes:
             res.append(self.spec(node))
         return res
     
-    def ceps(self, s_node):
+    def ceps(self, s_node: SNode) -> list[VNode]:
         return TCM.find_parents(s_node, self.get_specification_edges())
 
 
     ################ expand Test Suite Model with TCM #####################
 
-    def expand_tsm(self, tcm):
+    def expand_tsm(self, tcm) -> None:
         self.previous_tsm_s_nodes = tuple(self.get_specification_nodes())
         self.tcm_annotations = tcm.get_annotations()
         tcm_root = TCM.search_root(tcm.get_edges())
@@ -153,7 +153,7 @@ class TSM:
         self.catch_missing_input(tcm)
         #print(self.get_annotations())
 
-    def process_option_value(self, current_node, tcm_nodes, tcm_edges):
+    def process_option_value(self, current_node: Node, tcm_nodes: list[Node], tcm_edges: list[Edge]) -> VNode:
         v_nodes = self.get_value_nodes()
         for v_node in v_nodes:
             if v_node.get_identifier() == current_node.get_identifier(): return v_node
@@ -191,7 +191,7 @@ class TSM:
             self.add_containment_edge(new_v_node, tsm_v_node_child, current_node_edge.get_index())
         return new_v_node
     
-    def process_type(self, tsm_v_node, tsm_s_node):
+    def process_type(self, tsm_v_node: VNode, tsm_s_node: SNode) -> None:
         if tsm_s_node.stype() in NODE_COMPOSITE_TYPES: return 
         tsm_new_v_type = type(tsm_v_node.val())
         tsm_s_nodetype = tsm_s_node.stype()
@@ -204,7 +204,7 @@ class TSM:
         else:
             tsm_v_node.cast(tsm_s_nodetype)
     
-    def update_value_nodes_types(self, s_node):
+    def update_value_nodes_types(self, s_node: SNode) -> None:
         # never used on s_node with type NoneType
         v_nodes = TCM.find_parents(s_node, self.get_specification_edges())
         for v_node in v_nodes:
@@ -213,7 +213,7 @@ class TSM:
             if type(v_node.val()) != s_nodetype:
                 v_node.cast(s_nodetype)
     
-    def process_optional_spec(self, s_node, v_id, v_parent_identifier):
+    def process_optional_spec(self, s_node: SNode, v_id: str, v_parent_identifier: str) -> None:
         tcm_optional_nodes = self.tcm_annotations["nonexistent_nodes"]
         for parent_v_id, names in tcm_optional_nodes.items():
             if v_id == parent_v_id:
@@ -236,7 +236,7 @@ class TSM:
         if parent_s_node in self.previous_tsm_s_nodes:
             self.add_annotation("optional_nodes", s_node.get_identifier(),  s_node.name())
     
-    def catch_missing_input(self, tcm):
+    def catch_missing_input(self, tcm: TCM) -> None:
         specs_of_tcm = set()
         for node in tcm.get_nodes():
             vn = TCM.find_node_from_hash(self.get_value_nodes(), node.get_identifier())
