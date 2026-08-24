@@ -1,5 +1,4 @@
 import os
-import sys
 import json
 import hashlib
 from numpy import format_float_scientific
@@ -15,7 +14,7 @@ TYPES = {
 
 class Node:
 
-    def __init__(self, name, value, path = None, _hidden_type = None):
+    def __init__(self, name: str, value: bool|int|float|str|None, path: str = None, _hidden_type: type = None):
         self.n = name
         self.v = value
         self.path = path
@@ -23,93 +22,90 @@ class Node:
         self._type = _hidden_type
         self.identifier = None
     
-    def __repr__(self):
+    def __repr__(self) -> str:
         return f"N({self.name()}, {self.val()}, {self._type})"
     
-    def corresponds_to(self, other):
+    def corresponds_to(self, other: Node) -> bool:
         return self.get_identifier() == other.get_identifier()
     
-    def name(self):
+    def name(self) -> str:
         return self.n
 
-    def val(self):
+    def val(self) -> bool|int|float|str|None:
         return self.v
     
-    def set_val(self, value):
-        self.v = value
-    
-    def cast(self, typ):
+    def cast(self, typ: type) -> None:
         if self.val() is None: return
         self.set_val(typ(self.val()))
     
-    def get_path(self):
+    def get_path(self) -> str:
         return self.path
     
-    def get_signature(self):
+    def get_signature(self) -> str:
         return self.signature
     
-    def set_signature(self, sig):
+    def set_signature(self, sig: str) -> None:
         self.signature = sig
         self.set_identifier()
     
-    def get_type(self):
+    def get_type(self) -> type:
         return (type(self.val()) if self._type is None else self._type)
     
-    def get_stype(self):
+    def get_stype(self) -> str:
         return self.get_type().__name__
     
-    def set_type(self, t):
+    def set_type(self, t: type) -> None:
         self._type = t
     
-    def get_v_node_creation_info(self):
+    def get_v_node_creation_info(self) -> tuple[str, bool|int|float|str|None]:
         return self.get_identifier(), self.val()
 
-    def get_s_node_creation_info(self):
+    def get_s_node_creation_info(self) -> tuple[str, type]:
         return self.name(), self.get_type()
     
     ############### hash function ###########################
 
-    def hash_code(self):
+    def hash_code(self) -> str:
         return hashlib.md5(repr((self.get_path(), self.get_signature())).encode()).hexdigest()
     
-    def set_identifier(self):
+    def set_identifier(self) -> None:
         self.identifier = self.hash_code()
 
-    def get_identifier(self):
+    def get_identifier(self) -> str:
         return self.identifier
 
 
 class Edge:
-    def __init__(self, source, target, index = None):
+    def __init__(self, source: Node, target: Node, index: int|None = None) -> None:
         self.src = source
         self.tgt = target
         if isinstance(index, list):     self.index = index
         elif isinstance(index, int):    self.index = [index]
         else:                           self.index = None
     
-    def __repr__(self):
+    def __repr__(self) -> str:
         return f"E({self.source()} -> {self.target()})"
     
-    def corresponds_to(self, other):
+    def corresponds_to(self, other: Edge) -> bool:
         return self.source().corresponds_to(other.source()) and self.target().corresponds_to(other.target())
     
-    def source(self):
+    def source(self) -> Node:
         return self.src
 
-    def target(self):
+    def target(self) -> Node:
         return self.tgt
     
-    def get_index(self):
+    def get_index(self) -> list[int]:
         return self.index
-    
-    def concat_index(self, i):
+
+    def concat_index(self, i: list[int]) -> None:
         for index in i:
             if index not in self.get_index(): self.index.append(index)
 
 
 class TCM:
 
-    def __init__(self, file_path, data_key = None):
+    def __init__(self, file_path: str, data_key: str = None) -> None:
         self.annotations = {"filenames": {}, "nonexistent_nodes": {}}
         self.nodes, self.edges = self.json_to_tcm(file_path, data_key)
         self.add_annotation("filenames", self.search_root(self.get_edges()).get_identifier(), file_path)
@@ -118,7 +114,7 @@ class TCM:
 
     ################# Loading data from json file #################
 
-    def json_to_tcm(self, file, data_key):
+    def json_to_tcm(self, file: str, data_key: str) -> None:
         with open(file, "r", encoding="utf-8") as f:
             try:
                 data = json.load(f)
@@ -127,20 +123,19 @@ class TCM:
         return self.nodify(data, data_key)
     
     @staticmethod
-    def find_real_data(data, key):
+    def find_real_data(data: dict, key: str) -> dict|None:
         if key is None: return data
         if key in data: return data[key]
         else:
             for values in data.values():
                 if isinstance(values, dict):
                     ret = TCM.find_real_data(values, key)
-                    if ret: return ret
-
+                    if ret is not None: return ret
     
 
     ############ functions to transform data into Test Case Model ###########
 
-    def nodify(self, data, data_key):
+    def nodify(self, data: dict, data_key: str) -> tuple[list[Node], list[Edge]]:
         data = TCM.find_real_data(data, data_key)
         path = 'root'
         root = self.create_node("root", None, path)
@@ -150,7 +145,7 @@ class TCM:
         if sig is None: return [], []
         return nodes, edges
 
-    def nodify_rec(self, data, mother_node, nodes, edges, current_path):
+    def nodify_rec(self, data: dict, mother_node: Node, nodes: list[Node], edges: list[Edge], current_path: str) -> tuple[str, any]:
         data_type, generator = TCM.create_generator(data, mother_node)
         mother_node.set_type(list if data_type == "list" else dict)
 
@@ -166,8 +161,7 @@ class TCM:
         signature = (mother_node.name(), signature_item)
         return signature
 
-
-    def process_node(self, k, v, mother_node, nodes, edges, current_path, list_index):
+    def process_node(self, k: any, v: bool|int|float|str|list|dict|None, mother_node: Node, nodes: list[Node], edges: list[Edge], current_path: str, list_index: list|None) -> tuple[str, any]|None:
         if isinstance(v, NODE_SIMPLE_TYPES):
             casted_value = TCM.value_cast(v)
             new_node = self.create_node(k, casted_value, current_path)
@@ -189,7 +183,7 @@ class TCM:
         return signature
     
     @staticmethod
-    def create_generator(data, mother_node):
+    def create_generator(data: list|dict, mother_node: Node) -> tuple[str, iter[tuple[str, any]]]:
         if isinstance(data, dict):
             data_type = "dict"
             generator = ((k, v) for k, v in data.items())
@@ -202,7 +196,7 @@ class TCM:
         return data_type, generator
 
     @staticmethod
-    def value_cast(obj):
+    def value_cast(obj: any) -> bool|int|float|str:
         if isinstance(obj, str):
             if obj == "0": return False
             if obj == "1": return True
@@ -214,40 +208,39 @@ class TCM:
         return obj
     
     @staticmethod
-    def cast_for_signature(obj):
+    def cast_for_signature(obj: bool|int|float|str) -> str:
         if isinstance(obj, (bool, int, float)): return format_float_scientific(obj)
         else:                                   return obj
         
     
     ###################### getters & node-edge creators ####################
     
-    def get_nodes(self):
+    def get_nodes(self) -> list[Node]:
         return self.nodes
 
-    def get_edges(self):
+    def get_edges(self) -> list[Edge]:
         return self.edges
     
-    def get_model(self):
+    def get_model(self) -> tuple[list[Node], list[Edge]]:
         return self.get_nodes(), self.get_edges()
 
-    def create_node(self, label, value, path, stype=None):
+    def create_node(self, label: str, value: any, path: str, stype: type = None) -> Node:
         return Node(label, value, path, stype)
     
-    def create_edge(self, source, target, index = None):
-        # if index is not None: print(f"index = {index}, source : {source}, target : {target}")
+    def create_edge(self, source: Node, target: Node, index: list[int] = None) -> Edge:
         return Edge(source, target, index)
     
-    def get_annotations(self, annotation_type = "all"):
+    def get_annotations(self, annotation_type: str = "all") -> any:
         if annotation_type == "all":
             return self.annotations
         else:
             return self.annotations[annotation_type]
     
-    def add_annotation(self, annotation_type, k, v):
+    def add_annotation(self, annotation_type: str, k: any, v: any) -> None:
         if k in self.annotations[annotation_type]:  self.annotations[annotation_type][k].append(v)
         else:                                       self.annotations[annotation_type][k] = [v]
 
-    def get_leaves(self, source_node):
+    def get_leaves(self, source_node: Node) -> list[Node]:
         edges = self.get_edges()
         ret = []
 
@@ -259,37 +252,36 @@ class TCM:
         return ret
 
 
-
     ################ node/edge finder #############################
 
     @staticmethod
-    def find_node_from_hash(node_list, hash):
+    def find_node_from_hash(node_list: list[Node], hash: str) -> Node|None:
         condition = lambda node : node.get_identifier() == hash
         return TCM.find_node(node_list, condition, lambda x : x)
 
     @staticmethod
-    def find_node_from_edge(edge_list, match_node, from_source):
+    def find_node_from_edge(edge_list: list[Edge], match_node: Node, from_source: bool) -> Node:
         if from_source: functions = (lambda edge : edge.source() == match_node), (lambda edge : edge.target())
         else:           functions = (lambda edge : edge.target() == match_node), (lambda edge : edge.source())
 
         return TCM.find_node(edge_list, *functions)
 
     @staticmethod
-    def find_node(object_list, condition, return_value = lambda x : x):
+    def find_node(object_list: list, condition: function, return_value: function = lambda x : x) -> Node|None:
         for obj in object_list:
             if condition(obj): return return_value(obj)
         return None
     
     @staticmethod
-    def find_parents(node, edge_list):
+    def find_parents(node: Node, edge_list: list[Edge]) -> list[Node]:
         return [edge.source() for edge in edge_list if edge.target() == node]
     
     @staticmethod
-    def find_children(node, edge_list):
+    def find_children(node: Node, edge_list: list[Edge]) -> list[Node]:
         return [edge.target() for edge in edge_list if edge.source() == node]
     
     @staticmethod
-    def find_edges(edge_list, from_node = None, to_node = None):
+    def find_edges(edge_list: list[Edge], from_node: Node|None = None, to_node: Node|None = None) -> list[Edge]:
         if from_node is not None and to_node is not None:
             node_condition = lambda edge : edge.source() == from_node and edge.target() == to_node
         elif from_node is not None :
@@ -304,12 +296,12 @@ class TCM:
     
     ################# Visualize Graph ######################        
 
-    def show_tcm(self, alinea_length = 4, search_root=False):
+    def show_tcm(self, alinea_length: int = 4, search_root:bool = False) -> None:
         nodes, edges = self.get_model()
         root_node = TCM.search_root(nodes, edges) if search_root else nodes[0]
         print(self.show_tcm_rec("", root_node, 0, alinea_length))
 
-    def show_tcm_rec(self, return_string, current_node, current_alinea, alinea_length):
+    def show_tcm_rec(self, return_string: str, current_node: Node, current_alinea: int, alinea_length: int) -> str:
         return_string += f"{current_node}\n"
 
         _, edges = self.get_model()
@@ -326,15 +318,15 @@ class TCM:
     ################ searching root of graph ################
 
     @staticmethod
-    def is_root(node, edge_list):
+    def is_root(node: Node, edge_list: list[Edge]) -> bool:
         return [] == TCM.find_parents(node, edge_list)
 
     @staticmethod
-    def is_leaf(node, edge_list):
+    def is_leaf(node: Node, edge_list: list[Edge]) -> bool:
         return [] == TCM.find_children(node, edge_list)
     
     @staticmethod
-    def search_root(edge_list, start_edge = 0):
+    def search_root(edge_list: list[Edge], start_edge:int = 0) -> Node:
         if edge_list == []: return None
         if start_edge >= len(edge_list):raise(f"[ERROR] searched root from {start_edge}th edge but there only are {len(edge_list)} edges")
         
@@ -342,7 +334,7 @@ class TCM:
         return TCM.search_root_rec(edge_list, current_node)
 
     @staticmethod
-    def search_root_rec(edge_list, current_node):
+    def search_root_rec(edge_list: list[Edge], current_node: Node) -> Node:
         for edge in edge_list:
             if edge.target() == current_node:
                 return TCM.search_root_rec(edge_list, edge.source())
@@ -351,7 +343,7 @@ class TCM:
 
     ################# Unify TCM types #########################
 
-    def unify_types(self):
+    def unify_types(self) -> None:
         paths = {}
         for node in self.get_nodes():
             if node.get_path() in paths:
@@ -373,7 +365,7 @@ class TCM:
 
     ################# process annotations ##################
 
-    def process_nonexistent_nodes_annotation(self):
+    def process_nonexistent_nodes_annotation(self) -> None:
         annotations_to_add, annotations_to_del = [], []
         for ne_parent_node, ne_names in self.get_annotations("nonexistent_nodes").items():
             for ne_name in ne_names:

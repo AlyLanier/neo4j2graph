@@ -1,5 +1,6 @@
 from pydoc import locate
 from neo4j import GraphDatabase
+import sys
 
 try:
     from src.panoramix.json_to_tcm import *

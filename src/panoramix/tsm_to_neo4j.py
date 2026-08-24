@@ -3,10 +3,10 @@ import sys
 from neo4j import GraphDatabase
 
 try:
-    from src.panoramix.tcm_to_tsm import TSM
+    from src.panoramix.tcm_to_tsm import TSM, VNode, SNode, Edge
     from src.panoramix.json_to_tcm import TCM
 except:
-    from panoramix.tcm_to_tsm import TSM
+    from panoramix.tcm_to_tsm import TSM, VNode, SNode, Edge
     from panoramix.json_to_tcm import TCM
 
 STARTING_CHAR = "a"
@@ -16,27 +16,27 @@ def sanitize(obj):
     if isinstance(obj, str): return f"\'{obj}\'"
     return obj
 
-def v_node_creation_query(node):
+def v_node_creation_query(node: VNode) -> str:
     return f"CREATE ({STARTING_CHAR}{node.get_identifier()}:ValueNode {{value: {sanitize(node.val())}, identifier: {sanitize(node.get_identifier())}}})"
     #                 ^^^^^^^^^^^^^ -- to make it so the identifier does not start with a number, neo4j does not like it
 
-def s_node_creation_query(node):
+def s_node_creation_query(node: SNode) -> str:
     return f"CREATE ({STARTING_CHAR}{node.get_identifier()}:SpecificationNode {{name: {sanitize(node.name())}, type: {sanitize(node.stype_name())}}})"
 
-def edge_creation_query(edge, relation):
+def edge_creation_query(edge: Edge, relation: str) -> str:
     list_index = f" {{listIndex: {edge.get_index()}}}" if edge.get_index() is not None else ""
     return f"CREATE ({STARTING_CHAR}{edge.source().get_identifier()})-[{relation}{list_index}]->({STARTING_CHAR}{edge.target().get_identifier()})"
 
-def file_annotation_creation_query(node_id, file_names):
+def file_annotation_creation_query(node_id: str, file_names: list[str]) -> str:
     return f"CREATE (:FileNode:AnnotationNode {{filenames: {file_names}, annotation: null}})-[:ANNOTATES]->({STARTING_CHAR}{node_id})"
 
-def optional_node_annotation_creation_query(s_node_id):
+def optional_node_annotation_creation_query(s_node_id: str) -> str:
     return f"CREATE (cannotationnode)-[:ANNOTATES]->({STARTING_CHAR}{s_node_id})"
 
-def nonexistant_node_creation_query(parent_id, name):
+def nonexistant_node_creation_query(parent_id: str, name: str) -> str:
     return f"CREATE (cannotationnode)-[:ANNOTATES]->(:SpecificationNode {{name: '{name}', type: 'bool'}})<-[:CONTAINS]-({STARTING_CHAR}{parent_id})"
 
-def TSM_creation_query(tsm):
+def TSM_creation_query(tsm: TSM) -> str:
     query = ""
 
     for node in tsm.get_value_nodes():          query += v_node_creation_query(node) + "\n"
@@ -63,7 +63,7 @@ def TSM_creation_query(tsm):
     return query[:-1]
 
 
-def build_tsm(files):
+def build_tsm(files: list[str]):
     json_path = "arc_json"
     processed_json = []
     for filename in files:

@@ -1,11 +1,11 @@
 from src.panoramix.json_to_tcm import *
 
-def nodes_from_edges(edge_list):
+def nodes_from_edges(edge_list: list[Edge]) -> any:
     for edge in edge_list:
         yield edge.source()
         yield edge.target()
 
-def format_types_isinstance(types):
+def format_types_isinstance(types) -> tuple:
     if not isinstance(types, tuple):
         if isinstance(types, list):
             types = tuple(types)
@@ -13,7 +13,7 @@ def format_types_isinstance(types):
             types = (types,)
     return types
 
-def is_correct_node_types(*node_list_and_types):
+def is_correct_node_types(*node_list_and_types: list[tuple[list[Node], type|list[type]|tuple[type]]]) -> bool:
     result = []
     for node_list, node_types in node_list_and_types:
         types = format_types_isinstance(node_types)
@@ -25,7 +25,7 @@ def is_correct_node_types(*node_list_and_types):
             result.append(True)
     return all(result)
 
-def is_correct_edge_types(edge_list, edge_type, additional_conditions = []):
+def is_correct_edge_types(edge_list: list[Edge], edge_type: type|list[type]|tuple[type], additional_conditions: list[function] = []) -> bool:
     types = format_types_isinstance(edge_type)
     for edge in edge_list:
         if not isinstance(edge, types): 
@@ -37,13 +37,13 @@ def is_correct_edge_types(edge_list, edge_type, additional_conditions = []):
                 return False
     return True
 
-def is_duplicate(*lists):
+def is_duplicate(*lists: list[list]) -> bool:
     return any(map(lambda l: len(l) != len(set(l)), lists))
 
-def is_unique_root(*node_list_and_edge_list):
+def is_unique_root(*node_list_and_edge_list: list[tuple[list[Node], list[Edge]]]) -> bool:
     return all([(len([root for root in node_list if TCM.find_parents(root, edge_list) == []]) == 1) for node_list, edge_list in node_list_and_edge_list])
 
-def is_nodes_in_one_edge(*node_list_and_edge_list):
+def is_nodes_in_one_edge(*node_list_and_edge_list: list[tuple[list[Node], list[Edge]]]) -> bool:
     result = []
     for node_list, edge_list in node_list_and_edge_list:
         nodes_in_edges = set(node for node in nodes_from_edges(edge_list))
@@ -56,7 +56,7 @@ def is_nodes_in_one_edge(*node_list_and_edge_list):
             result.append(True)
     return all(result)
 
-def is_all_different_edges(*edge_lists):
+def is_all_different_edges(*edge_lists: list[list[Edge]]) -> bool:
     result = []
     for edge_list in edge_lists:
         for edge in edge_list:
@@ -73,7 +73,7 @@ def is_all_different_edges(*edge_lists):
 
     return all(result)
 
-def is_unique_parent(*node_list_and_edge_list):
+def is_unique_parent(*node_list_and_edge_list: list[tuple[list[Node], list[Edge]]]) -> bool:
     result = []
     for node_list, edge_list in node_list_and_edge_list:
         for node in node_list:
@@ -84,7 +84,7 @@ def is_unique_parent(*node_list_and_edge_list):
             result.append(True)
     return all(result)
 
-def is_exact_unique_child(*node_list_and_edge_list):
+def is_exact_unique_child(*node_list_and_edge_list: list[tuple[list[Node], list[Edge]]]) -> bool:
     result = []
     for node_list, edge_list in node_list_and_edge_list:
         for node in node_list:
