@@ -15,7 +15,7 @@ jobs:
   download_neo4j_jar:
     runs-on: ubuntu-latest
     steps:
-      - name: Get run ID of "build" workflow
+      - name: Get run ID of "build" workflow from UserDefinedFunctions-Mean
         id: get-run-id
         run: |
           OTHER_REPO="AlyLanier/neo4j-UserDefinedFunctions-Mean"
@@ -25,16 +25,14 @@ jobs:
           echo "run-id=${RUN_ID}" >> "$GITHUB_OUTPUT"
         env:
           GH_TOKEN: ${{ github.token }}
-      - name: Download artifact from "build" workflow
+      - name: Download artifact from "build" workflow from UserDefinedFunctions-Mean
         uses: actions/download-artifact@v4
         with:
           name: test_jar.jar # Match name used in test.yml upload artifact step
+          path: plugins/test_jar.jar
           github-token: ${{ github.token }}
           repository: AlyLanier/neo4j-UserDefinedFunctions-Mean
           run-id: ${{ steps.get-run-id.outputs.run-id }}
-
-      - name: Show downloaded files
-        run: ls -la
 
   tests:
     runs-on: ubuntu-latest
@@ -57,6 +55,9 @@ jobs:
           NEO4J_apoc_import_file_enabled: "true"
           NEO4J_apoc_import_file_use__neo4j__config: "true"
           NEO4J_PLUGINS: '["apoc", "apoc-extended"]'
+        volumes:
+          - ${{ github.workspace }}/plugins:/plugins
+
 
     steps:
       - name: Checkout code
