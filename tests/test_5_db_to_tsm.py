@@ -24,7 +24,7 @@ class TestDB(unittest.TestCase):
             driver.verify_connectivity()
 
             with driver.session(database = self.AUTH[0]) as session:
-                db_validity = session.run(GraphFunctions.Db_Validity_query()).single()
-        
-        self.assertTrue(db_validity[0], "The database TSM does not complete the tests, there is a problem in it")
+                db_validity, errors = session.run(GraphFunctions.Db_Validity_query()).single()
+
+        self.assertTrue(db_validity, errors)
 
