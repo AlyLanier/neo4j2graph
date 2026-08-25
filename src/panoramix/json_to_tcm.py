@@ -39,7 +39,7 @@ class Node:
     
     def cast(self, typ: type) -> None:
         if self.val() is None: return
-        self.set_type(typ(self.val()))
+        self.set_val(typ(self.val()))
     
     def get_path(self) -> str:
         return self.path
