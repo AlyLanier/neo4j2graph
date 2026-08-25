@@ -33,10 +33,13 @@ class Node:
 
     def val(self) -> bool|int|float|str|None:
         return self.v
+
+    def set_val(self, value: bool|int|float|str|None) -> None:
+        self.v = value
     
     def cast(self, typ: type) -> None:
         if self.val() is None: return
-        self.val = typ(self.val())
+        self.set_type(typ(self.val()))
     
     def get_path(self) -> str:
         return self.path
