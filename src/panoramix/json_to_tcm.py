@@ -33,6 +33,9 @@ class Node:
 
     def val(self) -> bool|int|float|str|None:
         return self.v
+
+    def set_val(self, value):
+        self.v = value
     
     def cast(self, typ: type) -> None:
         if self.val() is None: return
