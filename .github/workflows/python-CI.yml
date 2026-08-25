@@ -33,6 +33,9 @@ jobs:
           github-token: ${{ github.token }}
           repository: AlyLanier/neo4j-UserDefinedFunctions-Mean
           run-id: ${{ steps.get-run-id.outputs.run-id }}
+      
+      - name: print dir
+        run: ls ${{github.workspace}}/plugins
 
   tests:
     runs-on: ubuntu-latest
