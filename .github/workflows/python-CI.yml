@@ -63,6 +63,9 @@ jobs:
 
 
     steps:
+      - name: print dir
+        run: ls ${{github.workspace}}/plugins
+
       - name: Checkout code
         uses: actions/checkout@v6
         
