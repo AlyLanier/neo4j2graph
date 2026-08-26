@@ -32,6 +32,9 @@ jobs:
           github-token: ${{ github.token }}
           repository: AlyLanier/neo4j-UserDefinedFunctions-Mean
           run-id: ${{ steps.get-run-id.outputs.run-id }}
+    
+      - name: print
+        run: ls
       
       - name: Add and commit to main
         run: | 
