@@ -41,7 +41,7 @@ jobs:
             run: ls
         
           - name: print
-            run: ls
+            run: ls self
             
           #- name: Add and commit to main
            # run: | 
