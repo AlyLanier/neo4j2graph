@@ -40,8 +40,17 @@ jobs:
 
 
     steps:
+      - name: print dir
+        run: ls
+
       - name: Checkout code
         uses: actions/checkout@v6
+      
+      - name: print dir
+        run: ls
+      
+      - name: print dir
+        run: ls my_plugins
         
       - name: Set up Python
         uses: actions/setup-python@v5
