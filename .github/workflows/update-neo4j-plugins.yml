@@ -32,7 +32,6 @@ jobs:
             uses: actions/download-artifact@v4
             with:
                 name: test_jar.jar # Match name used in build.yml upload artifact step
-                path: my_plugins
                 github-token: ${{ github.token }}
                 repository: AlyLanier/neo4j-UserDefinedFunctions-Mean
                 run-id: ${{ steps.get-run-id.outputs.run-id }}
@@ -44,6 +43,6 @@ jobs:
             run: | 
                 git config --global user.name 'JAR Workflow Bot'
                 git config --global user.email 'bot@alylanier.github.io'
-                git add my_plugins/test_jar.jar
+                git add test_jar.jar
                 git commit -m "[Bot] Update JAR"
                 git push
