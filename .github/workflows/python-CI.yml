@@ -58,8 +58,8 @@ jobs:
           NEO4J_apoc_import_file_enabled: "true"
           NEO4J_apoc_import_file_use__neo4j__config: "true"
           NEO4J_PLUGINS: '["apoc", "apoc-extended"]'
-        #volumes:
-        #  - ${{ github.workspace }}/plugins:/plugins
+        volumes:
+          - ${{ github.workspace }}/plugins:/plugins
 
 
     steps:
