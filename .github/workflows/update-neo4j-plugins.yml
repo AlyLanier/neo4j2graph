@@ -1,45 +1,49 @@
 name: update jar
 
 on:
-  workflow_dispatch:
-  pull_request: 
-  push:
-    paths-ignore: 
-      - '**.jar'
+    workflow_dispatch:
+    pull_request: 
+    push:
+        paths-ignore: 
+            - '**.jar'
 
 jobs:
-  update_jar:
-    permissions:
-        contents: write
+    update_jar:
+        permissions:
+            contents: write
 
-    runs-on: ubuntu-latest
-    steps:
-      - name: Get run ID of "build" workflow from UserDefinedFunctions-Mean
-        id: get-run-id
-        run: |
-          OTHER_REPO="AlyLanier/neo4j-UserDefinedFunctions-Mean"
-          WF_NAME="build"
-          RUN_ID=`gh run --repo ${OTHER_REPO} list --workflow ${WF_NAME} --json databaseId --jq .[0].databaseId`
-          echo "Detected latest run id of ${RUN_ID} for workflow ${WF_NAME}"
-          echo "run-id=${RUN_ID}" >> "$GITHUB_OUTPUT"
-        env:
-          GH_TOKEN: ${{ github.token }}
-      - name: Download artifact from "build" workflow from UserDefinedFunctions-Mean
-        uses: actions/download-artifact@v4
-        with:
-          name: test_jar.jar # Match name used in test.yml upload artifact step
-          path: plugins/test_jar.jar
-          github-token: ${{ github.token }}
-          repository: AlyLanier/neo4j-UserDefinedFunctions-Mean
-          run-id: ${{ steps.get-run-id.outputs.run-id }}
-    
-      - name: print
-        run: ls
-      
-      - name: Add and commit to main
-        run: | 
-          git config --global user.name 'JAR Workflow Bot'
-          git config --global user.email 'bot@alylanier.github.io'
-          git add plugins/test_jar.jar
-          git commit -m "[Bot] Update JAR"
-          git push
+        runs-on: ubuntu-latest
+        steps:
+          - name: Checkout code
+            uses: actions/checkout@v6
+
+          - name: Get run ID of "build" workflow from UserDefinedFunctions-Mean
+            id: get-run-id
+            run: |
+                OTHER_REPO="AlyLanier/neo4j-UserDefinedFunctions-Mean"
+                WF_NAME="build"
+                RUN_ID=`gh run --repo ${OTHER_REPO} list --workflow ${WF_NAME} --json databaseId --jq .[0].databaseId`
+                echo "Detected latest run id of ${RUN_ID} for workflow ${WF_NAME}"
+                echo "run-id=${RUN_ID}" >> "$GITHUB_OUTPUT"
+            env:
+                GH_TOKEN: ${{ github.token }}
+
+          - name: Download artifact from "build" workflow from UserDefinedFunctions-Mean
+            uses: actions/download-artifact@v4
+            with:
+                name: test_jar.jar # Match name used in test.yml upload artifact step
+                path: plugins/test_jar.jar
+                github-token: ${{ github.token }}
+                repository: AlyLanier/neo4j-UserDefinedFunctions-Mean
+                run-id: ${{ steps.get-run-id.outputs.run-id }}
+            
+          - name: print
+            run: ls
+            
+          - name: Add and commit to main
+            run: | 
+                git config --global user.name 'JAR Workflow Bot'
+                git config --global user.email 'bot@alylanier.github.io'
+                git add plugins/test_jar.jar
+                git commit -m "[Bot] Update JAR"
+                git push
