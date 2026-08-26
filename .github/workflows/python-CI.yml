@@ -36,7 +36,7 @@ jobs:
           NEO4J_apoc_import_file_use__neo4j__config: "true"
           NEO4J_PLUGINS: '["apoc", "apoc-extended"]'
         volumes:
-          - my_plugins:/plugins
+          - my_plugins:/plugins:Z
 
 
     steps:
