@@ -37,12 +37,6 @@ jobs:
                 repository: AlyLanier/neo4j-UserDefinedFunctions-Mean
                 run-id: ${{ steps.get-run-id.outputs.run-id }}
             
-          - name: print
-            run: ls
-        
-          - name: print
-            run: ls my_plugins
-            
           - name: Add and commit to main
             run: | 
                 git config --global user.name 'JAR Workflow Bot'
