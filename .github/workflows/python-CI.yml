@@ -43,6 +43,9 @@ jobs:
       - name: print dir
         run: ls
 
+      - name: print dir
+        run: ls my_plugins
+
       - name: Checkout code
         uses: actions/checkout@v6
       
