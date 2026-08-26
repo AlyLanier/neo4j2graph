@@ -44,6 +44,6 @@ jobs:
             run: | 
                 git config --global user.name 'JAR Workflow Bot'
                 git config --global user.email 'bot@alylanier.github.io'
-                git add test_jar.jar
+                git add .
                 git commit -m "[Bot] Update JAR"
                 git push
