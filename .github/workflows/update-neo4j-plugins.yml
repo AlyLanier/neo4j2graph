@@ -1,7 +1,9 @@
-name: update jar
+name: update jar, triggered by udf
 
 on:
-    workflow_dispatch:
+  repository_dispatch:
+    types: 
+      - new-jar-file-uploaded
 
 jobs:
     update_jar:
