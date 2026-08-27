@@ -30,16 +30,6 @@ jobs:
           -v ${{github.workspace}}/my_plugins:/plugins \
           neo4j:latest
           docker start test
-
-      - name: wait for container
-        run: |
-          is_healthy=0
-          while [ $is_healthy != 'healthy' ]; do
-            sleep 2s
-            is_healthy=$(docker inspect --format="{{if .Config.Healthcheck}}{{.State.Health.Status}}{{end}}" test)
-            echo "neo4j state : $is_healthy"
-          done
-          echo neo4j container is healthy 
         
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -53,12 +43,15 @@ jobs:
       - name: run tests not needing neo4j
         run: python -m unittest tests/test_1_json_to_tcm.py tests/test_2_tcm_to_tsm.py -v
       
-      - name: check neo4j status
+      - name: wait for neo4j container
         run: |
-          is_healthy=$(docker inspect --format="{{if .Config.Healthcheck}}{{.State.Health.Status}}{{end}}" test) && echo status before neo4j tests : $is_healthy
-      
-      - name: check my plugins directory
-        run: ls my_plugins
+          is_healthy=$(docker inspect --format="{{if .Config.Healthcheck}}{{.State.Health.Status}}{{end}}" test)
+          while [ $is_healthy != 'healthy' ]; do
+            sleep 2s
+            is_healthy=$(docker inspect --format="{{if .Config.Healthcheck}}{{.State.Health.Status}}{{end}}" test)
+            echo "neo4j state : $is_healthy"
+          done
+          echo neo4j container is healthy
       
       - name: run tests needing neo4j
         run: python -m unittest tests/test_3_tsm_to_neo4j.py tests/test_4_tcm_to_neo4j.py tests/test_5_db_to_tsm.py -v
