@@ -25,8 +25,7 @@ class TestTSMtoNeo4J(unittest.TestCase):
 
         with GraphDatabase.driver(self.URI, auth=self.AUTH) as driver:
             driver.verify_connectivity()
-            print(driver.execute_query("SHOW PROCEDURES yield name RETURN name ORDER BY name DESC"))
-            print(driver.execute_query("WITH TSM_Statistics.mean([7, -1, 18], '-inf') as testminf RETURN testminf, testminf = -1"))
+            print(driver.execute_query("WITH TSM_Statistics.mean([7., -1., 18.], '-inf') as testminf RETURN testminf, testminf = -1."))
             driver.execute_query("MATCH (p)\nDETACH DELETE p") # remove current graph
             driver.execute_query(tsm_for_neo4j) # build graph here
             result = driver.execute_query(gf.get_TSM_query())
