@@ -4,10 +4,8 @@ on:
   workflow_dispatch:
   pull_request: 
   push:
-    branches: [ main ]
-    paths-ignore:
-      - '**.jar'
-      - '**.yml'
+    branches: 
+      - CI-check-health-workflow
 
 env:  
   NEO4J_USER: neo4j
@@ -24,8 +22,17 @@ jobs:
       
       - name: create service
         run: | 
-          docker create --label eb4219 --name test -p 7474:7474 -p 7687:7687 --health-cmd "cypher-shell -u neo4j -p password 'RETURN 1;' || exit 1" --health-interval 2s --health-timeout 5s --health-retries 10 -e "NEO4J_AUTH=neo4j/password" -e "NEO4J_apoc_export_file_enabled=true" -e "NEO4J_apoc_import_file_enabled=true" -e "NEO4J_apoc_import_file_use__neo4j__config=true" -e "NEO4J_PLUGINS=[\"apoc\", \"apoc-extended\"]" -e GITHUB_ACTIONS=true -e CI=true -v ${{github.workspace}}/my_plugins:/plugins neo4j:latest
+          docker create --label eb4219 --name test -p 7474:7474 -p 7687:7687 \
+          --health-cmd "cypher-shell -u neo4j -p password 'RETURN 1;' || exit 1" --health-interval 2s --health-timeout 5s --health-retries 10 \
+          -e "NEO4J_AUTH=neo4j/password" -e "NEO4J_apoc_export_file_enabled=true" -e "NEO4J_apoc_import_file_enabled=true" \
+          -e "NEO4J_apoc_import_file_use__neo4j__config=true" -e "NEO4J_PLUGINS=[\"apoc\", \"apoc-extended\"]" \
+          -e GITHUB_ACTIONS=true -e CI=true \
+          -v ${{github.workspace}}/my_plugins:/plugins \
+          neo4j:latest
           docker start test
+
+      - name: wait for container
+        run: timeout 60s sh -c 'until docker ps | grep <CONTAINER_NAME> | grep -q healthy; do echo "Waiting for container to be healthy..."; sleep 2; done'
         
       - name: Set up Python
         uses: actions/setup-python@v5
