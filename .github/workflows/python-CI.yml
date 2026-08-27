@@ -35,17 +35,14 @@ jobs:
           
       - name: Install Dependencies
         run: pip install -e ".[dev]"
-      
-      - name: check status
-        run: |
-          is_healthy=$(docker inspect --format="{{if .Config.Healthcheck}}{{.State.Health.Status}}{{end}}" test) && echo status is : $is_healthy
-          [ $is_healthy = 'healthy' ] || is_healthy=$(docker inspect --format="{{if .Config.Healthcheck}}{{.State.Health.Status}}{{end}}" test) && echo status is : $is_healthy
-          [ $is_healthy = 'healthy' ] || is_healthy=$(docker inspect --format="{{if .Config.Healthcheck}}{{.State.Health.Status}}{{end}}" test) && echo status is : $is_healthy
-          [ $is_healthy = 'healthy' ] || is_healthy=$(docker inspect --format="{{if .Config.Healthcheck}}{{.State.Health.Status}}{{end}}" test) && echo status is : $is_healthy
-          [ $is_healthy = 'healthy' ] || is_healthy=$(docker inspect --format="{{if .Config.Healthcheck}}{{.State.Health.Status}}{{end}}" test) && echo status is : $is_healthy
-          [ $is_healthy = 'healthy' ] || is_healthy=$(docker inspect --format="{{if .Config.Healthcheck}}{{.State.Health.Status}}{{end}}" test) && echo status is : $is_healthy
-          [ $is_healthy = 'healthy' ] || is_healthy=$(docker inspect --format="{{if .Config.Healthcheck}}{{.State.Health.Status}}{{end}}" test) && echo status is : $is_healthy
-          [ $is_healthy = 'healthy' ] || is_healthy=$(docker inspect --format="{{if .Config.Healthcheck}}{{.State.Health.Status}}{{end}}" test) && echo status before starting tests is : $is_healthy
 
-      - name: run tests
-        run: python -m unittest discover -s tests -v
+      - name: run tests not needing neo4j
+        run: python -m unittest tests/test_1_json_to_tcm.py tests/test_2_tcm_to_tsm.py -v
+      
+      - name: check neo4j status
+        run: |
+          is_healthy=$(docker inspect --format="{{if .Config.Healthcheck}}{{.State.Health.Status}}{{end}}" test) && echo status before neo4j tests : $is_healthy
+      
+      - name: run tests needing neo4j
+        run: python -m unittest tests/test_3_tsm_to_neo4j.py tests/test_4_tcm_to_neo4j.py tests/test_5_db_to_tsm.py -v
+
