@@ -33,6 +33,7 @@ jobs:
 
       - name: wait for container
         run: |
+          is_healthy=0
           while [ $is_healthy != 'healthy' ]; do
             sleep 2s
             is_healthy=$(docker inspect --format="{{if .Config.Healthcheck}}{{.State.Health.Status}}{{end}}" test)
