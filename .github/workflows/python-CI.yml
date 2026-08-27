@@ -32,7 +32,13 @@ jobs:
           docker start test
 
       - name: wait for container
-        run: timeout 60s sh -c 'until docker ps | grep <CONTAINER_NAME> | grep -q healthy; do echo "Waiting for container to be healthy..."; sleep 2; done'
+        run: |
+          while [ $is_healthy != 'healthy' ]; do
+            sleep 2s
+            is_healthy=$(docker inspect --format="{{if .Config.Healthcheck}}{{.State.Health.Status}}{{end}}" test)
+            echo "neo4j state : $is_healthy"
+          done
+          echo neo4j container is healthy 
         
       - name: Set up Python
         uses: actions/setup-python@v5
