@@ -38,14 +38,14 @@ jobs:
       
       - name: check status
         run: |
-          is_healthy=$(docker inspect --format="{{if .Config.Healthcheck}}{{.State.Health.Status}}{{end}}") && echo status is : $is_healthy
-          [ $is_healthy = 'healthy' ] || is_healthy=$(docker inspect --format="{{if .Config.Healthcheck}}{{.State.Health.Status}}{{end}}") && echo status is : $is_healthy
-          [ $is_healthy = 'healthy' ] || is_healthy=$(docker inspect --format="{{if .Config.Healthcheck}}{{.State.Health.Status}}{{end}}") && echo status is : $is_healthy
-          [ $is_healthy = 'healthy' ] || is_healthy=$(docker inspect --format="{{if .Config.Healthcheck}}{{.State.Health.Status}}{{end}}") && echo status is : $is_healthy
-          [ $is_healthy = 'healthy' ] || is_healthy=$(docker inspect --format="{{if .Config.Healthcheck}}{{.State.Health.Status}}{{end}}") && echo status is : $is_healthy
-          [ $is_healthy = 'healthy' ] || is_healthy=$(docker inspect --format="{{if .Config.Healthcheck}}{{.State.Health.Status}}{{end}}") && echo status is : $is_healthy
-          [ $is_healthy = 'healthy' ] || is_healthy=$(docker inspect --format="{{if .Config.Healthcheck}}{{.State.Health.Status}}{{end}}") && echo status is : $is_healthy
-          [ $is_healthy = 'healthy' ] || is_healthy=$(docker inspect --format="{{if .Config.Healthcheck}}{{.State.Health.Status}}{{end}}") && echo status before starting tests is : $is_healthy
+          is_healthy=$(docker inspect --format="{{if .Config.Healthcheck}}{{.State.Health.Status}}{{end}}" test) && echo status is : $is_healthy
+          [ $is_healthy = 'healthy' ] || is_healthy=$(docker inspect --format="{{if .Config.Healthcheck}}{{.State.Health.Status}}{{end}}" test) && echo status is : $is_healthy
+          [ $is_healthy = 'healthy' ] || is_healthy=$(docker inspect --format="{{if .Config.Healthcheck}}{{.State.Health.Status}}{{end}}" test) && echo status is : $is_healthy
+          [ $is_healthy = 'healthy' ] || is_healthy=$(docker inspect --format="{{if .Config.Healthcheck}}{{.State.Health.Status}}{{end}}" test) && echo status is : $is_healthy
+          [ $is_healthy = 'healthy' ] || is_healthy=$(docker inspect --format="{{if .Config.Healthcheck}}{{.State.Health.Status}}{{end}}" test) && echo status is : $is_healthy
+          [ $is_healthy = 'healthy' ] || is_healthy=$(docker inspect --format="{{if .Config.Healthcheck}}{{.State.Health.Status}}{{end}}" test) && echo status is : $is_healthy
+          [ $is_healthy = 'healthy' ] || is_healthy=$(docker inspect --format="{{if .Config.Healthcheck}}{{.State.Health.Status}}{{end}}" test) && echo status is : $is_healthy
+          [ $is_healthy = 'healthy' ] || is_healthy=$(docker inspect --format="{{if .Config.Healthcheck}}{{.State.Health.Status}}{{end}}" test) && echo status before starting tests is : $is_healthy
 
       - name: run tests
         run: python -m unittest discover -s tests -v
