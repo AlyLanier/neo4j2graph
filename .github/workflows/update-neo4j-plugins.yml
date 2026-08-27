@@ -1,4 +1,4 @@
-name: update jar, triggered by udf
+name: Update plugin JAR file
 
 on:
   repository_dispatch:
