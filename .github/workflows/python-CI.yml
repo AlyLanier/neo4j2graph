@@ -43,6 +43,9 @@ jobs:
         run: |
           is_healthy=$(docker inspect --format="{{if .Config.Healthcheck}}{{.State.Health.Status}}{{end}}" test) && echo status before neo4j tests : $is_healthy
       
+      - name: check my plugins directory
+        run: ls my_plugins
+      
       - name: run tests needing neo4j
         run: python -m unittest tests/test_3_tsm_to_neo4j.py tests/test_4_tcm_to_neo4j.py tests/test_5_db_to_tsm.py -v
 
