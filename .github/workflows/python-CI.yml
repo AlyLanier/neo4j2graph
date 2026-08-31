@@ -49,7 +49,7 @@ jobs:
           sleep_time=2
 
           is_healthy=$(docker inspect --format="{{if .Config.Healthcheck}}{{.State.Health.Status}}{{end}}" test)
-          while [ $is_healthy != 'healthy' && $is_healthy != 'unhealthy' && $timeout >= 0]; do
+          while [ $is_healthy != 'healthy' && $is_healthy != 'unhealthy' && $timeout >= 0 ]; do
             echo "neo4j state : $is_healthy"
             timeout=$timeout-$sleep_time
             sleep $sleep_time
