@@ -4,8 +4,10 @@ on:
   workflow_dispatch:
   pull_request: 
   push:
-    branches: 
-      - main
+    branches: [ main ]
+    paths-ignore:
+      - '**.jar'
+      - '**.yml'
 
 env:  
   NEO4J_USER: neo4j
