@@ -45,12 +45,17 @@ jobs:
       
       - name: wait for neo4j container
         run: |
+          timeout=30
+          sleep_time=2
+
           is_healthy=$(docker inspect --format="{{if .Config.Healthcheck}}{{.State.Health.Status}}{{end}}" test)
-          while [ $is_healthy != 'healthy' ]; do
-            sleep 2s
-            is_healthy=$(docker inspect --format="{{if .Config.Healthcheck}}{{.State.Health.Status}}{{end}}" test)
+          while [ $is_healthy != 'healthy' && $is_healthy != 'unhealthy' && $timeout >= 0]; do
             echo "neo4j state : $is_healthy"
+            timeout=$timeout-$sleep_time
+            sleep $sleep_time
+            is_healthy=$(docker inspect --format="{{if .Config.Healthcheck}}{{.State.Health.Status}}{{end}}" test)
           done
+          
           echo neo4j container is healthy
       
       - name: run tests needing neo4j
