@@ -3,7 +3,7 @@ import os
 try:
     from src.panoramix.json_to_tcm import TCM, Node, Edge, TYPES, NODE_COMPOSITE_TYPES
 except:
-    from panoramix.json_to_tcm import TCM, Node, Edge, TYPES, NODE_COMPOSITE_TYPES
+    from json_to_tcm import TCM, Node, Edge, TYPES, NODE_COMPOSITE_TYPES
 
 class SNode:
     def __init__(self, name: str, stype: type) -> None:

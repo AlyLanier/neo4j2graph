@@ -6,8 +6,8 @@ try:
     from src.panoramix.tcm_to_tsm import TSM, VNode, SNode, Edge
     from src.panoramix.json_to_tcm import TCM
 except:
-    from panoramix.tcm_to_tsm import TSM, VNode, SNode, Edge
-    from panoramix.json_to_tcm import TCM
+    from tcm_to_tsm import TSM, VNode, SNode, Edge
+    from json_to_tcm import TCM
 
 STARTING_CHAR = "a"
 
@@ -80,7 +80,7 @@ def main():
     #test_tsm = build_tsm(['Mahyco_0x5b67d7517e00.json'])
     string_for_neo4j = TSM_creation_query(test_tsm)
     
-    URI = "bolt://neo4j:7687"
+    URI = "bolt://localhost:7687"
     AUTH = ("neo4j", "password")
 
     with GraphDatabase.driver(URI, auth=AUTH) as driver:
@@ -95,7 +95,7 @@ def main_populate():
     test_tsm = build_tsm(TCM_files)
     string_for_neo4j = TSM_creation_query(test_tsm)
 
-    URI = "bolt://neo4j:7687"
+    URI = "bolt://localhost:7687"
     AUTH = ("neo4j", "password")
 
     with GraphDatabase.driver(URI, auth=AUTH) as driver:
