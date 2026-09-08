@@ -1,15 +1,22 @@
 from option_hull import HullByParts
 from segments import Segment
 import numpy as np
+from math import log10
 
 
 class ChartDataMaker:
+    SCALER = {'linear': lambda x: x,
+              'log': log10}
 
-    def __init__(self, options, hull_range, reference_function = None, reference_primitive = None):
+    def __init__(self, options, hull_range, reference_function = None, reference_primitive = None, x_scale = None):
         self.values_to_occurrences = options
-        print(hull_range)
-        print(options)
-        self.hull = HullByParts([(1./occ, value) for value, occ in options.items()], Segment(*hull_range) if hull_range is not None else None, reference_function, reference_primitive)
+
+        self.scale = x_scale if x_scale is not None else self.scale_decider(options)
+        self.hull = HullByParts(curves_to_add=[(1./occ, value) for value, occ in options.items()], 
+                                function_range=None if hull_range is None else Segment(*hull_range), 
+                                reference_function=reference_function, 
+                                reference_primitive=reference_primitive, 
+                                data_scale=lambda x: self.scaling(x))
 
     def get_hull(self):
         return self.hull
@@ -38,41 +45,59 @@ class ChartDataMaker:
 
         self.get_hull().add_subfunction((1./occurrences, value))
 
+    def scale_decider(self, options):
+        for val in options.keys():
+            if val <= 0.: return 'linear'
+            if abs(log10(val)) > 6:
+                return 'log'
+        return 'linear'
+
+    def get_scale(self):
+        return self.scale
+
+    def scaling(self, v):
+        return self.SCALER[self.get_scale()](v)
+
     @staticmethod
     def normalize_score(liste):
         if liste.size == 0: return
-        min_value = min(liste)
+        try:
+            min_value = min(liste)
+        except:
+            print(liste)
         max_value = max(liste)
 
         return lambda l : (l - min_value)/(max_value - min_value)
 
     def generate_data(self, nbpoints, with_score=False):
-        x = np.linspace(*self.get_hull().get_range().as_tuple(), nbpoints)
-        y = self.get_hull()(x)
+        hull = self.get_hull()
+        x = np.linspace(*hull.get_range().as_tuple(), nbpoints)
+        y = hull(x)
 
         if with_score:
             max_height = max(y)
+            values = hull.get_values()
             options = self.get_options()
-
-            #fig = plotille.Figure()
             
             x_score = []
             score = []
             for v in x: 
-                if v not in options:
+                if v not in values:
                     x_score.append(v)
-                    score.append(self.get_hull().score_of_new_curb_test((1., v)))
+                    score.append(hull.score_of_new_curb_test((1., v)))
             score = np.array(score)
 
             x_taken_values_score = []
             taken_values_score = []
             for v in options:
-                x_taken_values_score.append(v)
-                taken_values_score.append(self.get_hull().score_of_new_curb_test((1./(options[v]+1), v)))
+                scaled_value = self.scaling(v)
+                x_taken_values_score.append(scaled_value)
+                taken_values_score.append(hull.score_of_new_curb_test((1./(options[v]+1), scaled_value)))
             
 
             taken_values_score = np.array(taken_values_score)
             x_taken_values_score = np.array(x_taken_values_score)
+            
 
             norm = ChartDataMaker.normalize_score(np.concatenate((score, taken_values_score), axis=0))
             score = norm(score)*max_height

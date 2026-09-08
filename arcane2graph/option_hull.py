@@ -9,18 +9,22 @@ class HullByParts:
                  curves_to_add: list[tuple[float, float]] = [],
                  function_range: Segment = None,
                  reference_function: callable[float, float] = None,
-                 reference_primitive: callable[float, callable[float, float]] = None
+                 reference_primitive: callable[float, callable[float, float]] = None,
+                 data_scale = lambda x: x
                  ) -> None:
         self.set_subfunctionSegments({})
         self.set_range(function_range)
         self.set_reference_function(reference_function)
         self.set_primitive(reference_primitive)
+        self.data_scale = data_scale
 
         if self.get_range() is None:
             if len(curves_to_add) > 1:
-                self.set_range(Segment(min(curves_to_add, key=lambda x: x[1])[1], max(curves_to_add, key=lambda x: x[1])[1]))
+                self.set_range(Segment(self.scale(min(curves_to_add, key=lambda x: x[1])[1]), self.scale(max(curves_to_add, key=lambda x: x[1])[1])))
             elif curves_to_add != []:
-                self.set_range(Segment(0., 2*curves_to_add[0][1]))
+                start, end = 0., 2*self.scale(curves_to_add[0][1])
+                if end < start: start, end = end, start 
+                self.set_range(Segment(start, end))
 
         for params in curves_to_add:
             self.add_subfunction(params)
@@ -119,6 +123,12 @@ class HullByParts:
                 self.subfunctionSegments[params] += segment_list
             else:
                 self.subfunctionSegments[params] = segment_list
+
+    def get_scale(self):
+        return self.data_scale
+
+    def scale(self, value):
+        return self.get_scale()(value)
 
 
     #################### sanitizers ########################
@@ -348,7 +358,9 @@ class HullByParts:
             self.get_subfunctionSegments()[params].remove(segment)
     
     def add_subfunction(self, parameters: tuple[float, float]) -> None:
-        a, b = parameters = HullByParts.sanitize_parameters(parameters)
+        a, b = HullByParts.sanitize_parameters(parameters)
+        b = self.scale(b)
+        parameters = a, b
         
         for c, d in self.get_subfunctionSegments():
             if b == d:

@@ -1,50 +1,43 @@
-from collections import Counter
 from neo4j import GraphDatabase
 from data_hull import ChartDataMaker
 
 from prefab_ui.app import PrefabApp
-from prefab_ui.components import Button, Column, ForEach, Slider, Input, Muted, Row, Text, DataTable, DataTableColumn, Grid, Combobox, ComboboxOption, Label
+from prefab_ui.components import Button, Column, ForEach, Row, Text, DataTable, DataTableColumn, Grid, Combobox, ComboboxOption, Label, If, Else
 from prefab_ui.actions import AppendState, PopState, SetState
-from prefab_ui.rx import Rx
+from prefab_ui.rx import Rx, RESULT, ERROR, ITEM
+from prefab_ui.actions.mcp import CallTool
 
 from prefab_ui.components.charts import LineChart, BarChart, ChartSeries
-from fastmcp import FastMCP
+from fastmcp import FastMCP, FastMCPApp
 from fastmcp.tools import tool
 
 import functools
 import plotille
 
+
 class MCPxNeo4j:
-    def __init__(self, uri, auth):
-        self.uri = uri
-        self.auth = auth
 
-
-##################### getters #####################
-
-    def get_uri(self):
-        return self.uri
-
-    def get_auth(self):
-        return self.auth
-
+    URI = "bolt://localhost:7687"
+    AUTH = ("neo4j", "password")
+    app = FastMCPApp("MyFirstApp")
 
 #################### decorator for using neo4j ###################
 
     def _uses_db(func):
         @functools.wraps(func)
-        def connexion_manager(self, *args, **kwargs):
-            with GraphDatabase.driver(self.get_uri(), auth=self.get_auth()) as driver:
+        def connexion_manager(*args, **kwargs):
+            with GraphDatabase.driver(uri=MCPxNeo4j.URI, auth=MCPxNeo4j.AUTH) as driver:
                 driver.verify_connectivity()
-                with driver.session(database=self.get_auth()[0]) as session:
-                    return func(self, session, *args, **kwargs)
+                with driver.session(database=MCPxNeo4j.AUTH[0]) as session:
+                    return func(session, *args, **kwargs)
 
         return connexion_manager
 
 ################### functions to retrieve data from neo4j ##################
 
     @_uses_db
-    def query_specs(self, session):
+    @staticmethod
+    def query_specs(session):
         members = []
         query = """match (root:SpecificationNode) where not (root)<-[:CONTAINS]-()
 match p=(root)-[:CONTAINS*]->(s:SpecificationNode)
@@ -55,7 +48,8 @@ return spec.name, spec.type, path, elementId(spec)"""
             members.append({'name': n, 'type': t, 'path': p, 'id': uri})
         return members
 
-    def query_spec(self, session, element_id):
+    @staticmethod
+    def query_spec(session, element_id):
         query = f"""match (s:SpecificationNode) where elementId(s) = '{element_id}'
 match p=(root)-[:CONTAINS*]->(s) where not (root)<-[:CONTAINS]-()
 with reduce(occ="root", n in nodes(p)[1..]|occ+'.'+n.name) as path, s
@@ -65,7 +59,8 @@ return s.name, path, s.type, s.occurrence""" #, a.range        optional match (a
         spec_name, spec_path, spec_type, spec_occ = result #, spec_range
         return {'name': spec_name, 'path': spec_path, 'type': spec_type, 'occurrence': spec_occ, 'range': None} #spec_range
 
-    def query_values_of_spec(self, session, element_id):
+    @staticmethod
+    def query_values_of_leaf_spec(session, element_id):
         query = f"""match (s:SpecificationNode) where elementId(s) = '{element_id}'
 match (vn:ValueNode) where (s)<-[:IS_SPECIFIED_BY]-(vn)
 return vn.value, vn.occurrence"""
@@ -75,36 +70,33 @@ return vn.value, vn.occurrence"""
             ret[value] = occurrences
         return ret
 
-    @_uses_db
-    def query_score(self, session, element_id):
-        spec_data = self.query_spec(session, element_id)
-        option = self.query_values_of_spec(session, element_id)
-        
-            
+    @staticmethod
+    def query_values_of_node_spec(session, element_id):
+        query = f"""match (s:SpecificationNode) where elementId(s) = '{element_id}'
+match (vn:ValueNode) where (s)<-[:IS_SPECIFIED_BY]-(vn)
+return elementId(vn), vn.occurrence"""
+        result = session.run(query)
+        ret = {}
+        for value, occurrences in result:
+            ret[value] = occurrences
+        return ret
 
-        
-        a = """
-        option = {
-            .1: 13,
-            2.5: 37,
-            4.45: 2,
-            4.7: 3,
-            6: 17,
-            7.5: 5,
-            7.9: 6,
-            8.33: 2,
-            10.55: 35
-        }"""
+    @_uses_db
+    @staticmethod
+    def query_score(session, element_id):
+        spec_data = MCPxNeo4j.query_spec(session, element_id)
+        option = MCPxNeo4j.query_values_of_node_spec(session, element_id) if spec_data['type'] in ['dict', 'list'] else MCPxNeo4j.query_values_of_leaf_spec(session, element_id)
 
         return spec_data, option
 
 
 
-#################### mcp tools ####################
+#################### mcp ui objects ####################
 
-    @tool
-    def show_specs(self) -> PrefabApp:
-        members = self.query_specs()
+    @app.ui()
+    @staticmethod
+    def show_specs():
+        members = MCPxNeo4j.query_specs()
         with PrefabApp(mode='dark') as app:
             with Column(gap=4, css_class="p-6"):
                 with Grid(columns=[1], gap=4):
@@ -120,46 +112,62 @@ return vn.value, vn.occurrence"""
         return app
     ###############################
 
-    def plot_as_string(self, x, y, x_score, score, x_of_values, score_of_values):
-        fig = plotille.Figure()
-        fig.width = 200
-        fig.height = 20
-        fig.set_x_limits(x[0], x[-1])
-        fig.set_y_limits(0., max(y)*1.05)
-        fig.plot(x, y, lc='cyan', label='Hull')
-        fig.plot(x_score, score, lc='green', label='Score new options')
-        fig.scatter(x_of_values, score_of_values, lc='red', label='Score old option')
-        print(fig.show(True))
+    @staticmethod
+    def chart_as_string(data):
+        ret = ""
+        width = 200
+        max_value_length = max(map(lambda x: len(str(x)), data.keys()))
+        max_occ = max(data.values())
+        for value, occ in data.items():
+            string = str(value)
+            ret += string + (max_value_length - len(string))*" " + " : " + int((width - (max_value_length + 3))*(occ/max_occ))*'*'+'\n'
+        print(ret)
 
-    def histogram_option(self, spec_data, options_data):
+    @staticmethod
+    def histogram_option(spec_data, options_data):
         print('HISTO')
         nb_occ_data = sum(options_data.values())
         if spec_data['occurrence'] != nb_occ_data:
-            options_data['undefined'] = 1#spec_data['occurrence'] - nb_occ_data
-
+            options_data['undefined'] = spec_data['occurrence'] - nb_occ_data
+        
+        MCPxNeo4j.chart_as_string(options_data)
         data = [{'value': value, 'count': occ} for value, occ in options_data.items()]
+        
+        return {'data': data, 'series': ChartSeries(dataKey='count', label='Occurrence Count'), 'x_axis': 'value', 'showLegend': True}
+        #return f"{{'data': {data}, 'series': {ChartSeries(dataKey='count', label='Occurrence Count')}, 'x_axis': 'value', 'showLegend': {True}}}"
+        return  BarChart(
+                   data=data,
+                   series=[ChartSeries(dataKey='count', label='Occurrence Count')],
+                   x_axis='value',
+                   height=100,
+                   showLegend=True
+                )
+        
 
-        with Grid(columns=[1], gap=4) as grid:
-            BarChart(
-                data=data,
-                series=[ChartSeries(dataKey='count', label='Occurrence Count')],
-                x_axis='value',
-                showLegend=True
-            )
-        return grid
+    @staticmethod
+    def plot_as_string(x, y, x_score, score, x_of_values, score_of_values, x_scale='linear'):
+            fig = plotille.Figure()
+            fig.width = 200
+            fig.height = 20
+            fig.set_x_limits(x[0], x[-1])
+            fig.set_y_limits(0., max(y)*1.05)
+            if x_scale == 'log':
+                fig.x_label = 'Log(X)'
+            fig.plot(x, y, lc='cyan', label='Hull')
+            fig.plot(x_score, score, lc='green', label='Score new options')
+            fig.scatter(x_of_values, score_of_values, lc='red', label='Score old option')
+            print(fig.show(True))
 
-    def plot_option(self, spec_data, options_data):
+    @staticmethod
+    def plot_option(spec_data, options_data):
         print('PLOT')
         sign = lambda x: 1. if x >= 0 else -1.
         power = lambda n: (lambda x: abs(x)**n, lambda a: (lambda x: sign(x)*a**n * abs(x)**(n+1)/(n+1)))
         distance_function = power(2)
 
-        print('before')
-        print(options_data)
         data_maker = ChartDataMaker(options_data, spec_data['range'], *distance_function)
-        print('after')
         data = data_maker.generate_data(1000, True)
-        self.plot_as_string(*data)
+        MCPxNeo4j.plot_as_string(*data, x_scale=data_maker.get_scale())
 
         x, y, x_score, score, x_of_values, score_of_values = data #f that
         graph_data = []
@@ -184,38 +192,61 @@ return vn.value, vn.occurrence"""
             )
         return grid
 
-    def event_option(self, element_id):
-        spec_data, options = self.query_score(element_id)
+    @app.tool()
+    @staticmethod
+    def event_option(element_id):
+        spec_data, options = MCPxNeo4j.query_score(element_id)
         print(spec_data)
         print(options)
     
         if spec_data['type'] in ['bool', 'int', 'str']:
-            return self.histogram_option(spec_data, options)
+            return MCPxNeo4j.histogram_option(spec_data, options)
         elif spec_data['type'] == 'float':
-            return self.plot_option(spec_data, options)
+            return MCPxNeo4j.plot_option(spec_data, options)
 
+    @app.ui()
+    @staticmethod
+    def show_option_score():
+        members = MCPxNeo4j.query_specs()
 
-    @tool
-    def show_option_score(self) -> PrefabApp:
-        members = self.query_specs()
         with PrefabApp(mode='dark') as app:
             options = Rx("options")
-            #print(options.key, options.prec)
-            #test = Rx(lambda x: self.event_option(x))
-            for spec in members:
-                with Row(gap = 2):
-                    data = self.event_option(spec['id'])
-                    AppendState(options, data)
+            with Column(gap=3, css_class="w-fit mx-auto"):
+                with Combobox(placeholder="Search options", 
+                            searchPlaceholder="Filter by path",
+                            onChange=[#AppendState(options, '{{$event}}'), 
+                                        CallTool(MCPxNeo4j.event_option, 
+                                                arguments={"element_id": "{{$event}}"}, 
+                                                on_success=AppendState(options, RESULT), 
+                                                on_error=AppendState(options, ERROR))],
+                            css_class="w-fit mx-auto",
+                            align='center'
+                            ):
+                    for data in members:
+                        ComboboxOption(data['path'], value=data['id'])
 
-                    Button(
-                        "Delete", variant="ghost", size="sm",
-                        on_click=PopState(options, "{{$index}}"),
-                    )
-            
+                with ForEach(options):
+                    with Row(gap=2):
+
+                        #Text(str(ITEM.data))
+                        #Text(str(ITEM.series))
+                        Text(str(ITEM.x_axis))
+                        #Text(str(ITEM.showLegend))
+                        
+                        #BarChart(data='{{$item.data}}', series=[ITEM.series], x_axis='{{$item.x_axis}}', showLegend=bool(ITEM.showLegend))
+                        
+                        Button(
+                            "×", variant="ghost", size="sm",
+                            on_click=PopState(options, "{{ $index }}"),
+                        )
+                    
         return app
+            
+
     ############################
 
-    
+
+
 
 if __name__ == '__main__':
 
@@ -224,16 +255,8 @@ if __name__ == '__main__':
     mcp = FastMCP("My First App")
 
     test = MCPxNeo4j(URI, auth=AUTH)
-    test.event_option('4:f766f605-3643-4f9c-8554-440a213da53a:89')
+    test.event_option('4:f766f605-3643-4f9c-8554-440a213da53a:346')
 
 
 else:
-
-    URI = "bolt://localhost:7687"
-    AUTH = ("neo4j", "password")
-    mcp = FastMCP("My First App")
-
-    test = MCPxNeo4j(URI, auth=AUTH)
-
-    #mcp.add_tool(test.show_specs)
-    mcp.add_tool(test.show_option_score)
+    mcp = FastMCP("Panoramix Server", providers=[MCPxNeo4j.app])
