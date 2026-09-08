@@ -133,7 +133,7 @@ return elementId(vn), vn.occurrence"""
         MCPxNeo4j.chart_as_string(options_data)
         data = [{'value': value, 'count': occ} for value, occ in options_data.items()]
         
-        return {'data': data, 'series': ChartSeries(dataKey='count', label='Occurrence Count'), 'x_axis': 'value', 'showLegend': True}
+        return {'data': data, 'series': [ChartSeries(dataKey='count', label='Occurrence Count')], 'x_axis': 'value', 'showLegend': True}
         #return f"{{'data': {data}, 'series': {ChartSeries(dataKey='count', label='Occurrence Count')}, 'x_axis': 'value', 'showLegend': {True}}}"
         return  BarChart(
                    data=data,
@@ -199,7 +199,7 @@ return elementId(vn), vn.occurrence"""
         print(spec_data)
         print(options)
     
-        if spec_data['type'] in ['bool', 'int', 'str']:
+        if spec_data['type'] in ['bool', 'int', 'str', 'list', 'dict']:
             return MCPxNeo4j.histogram_option(spec_data, options)
         elif spec_data['type'] == 'float':
             return MCPxNeo4j.plot_option(spec_data, options)
@@ -229,11 +229,12 @@ return elementId(vn), vn.occurrence"""
                     with Row(gap=2):
 
                         #Text(str(ITEM.data))
-                        #Text(str(ITEM.series))
-                        Text(str(ITEM.x_axis))
-                        #Text(str(ITEM.showLegend))
+                        #Text(ITEM.x_axis)
+                        #Text(str(ITEM.x_axis))
+                        #Text(f".{ITEM.showLegend}.")
+                        #Text(f".{str(ITEM.showLegend)}.")
                         
-                        #BarChart(data='{{$item.data}}', series=[ITEM.series], x_axis='{{$item.x_axis}}', showLegend=bool(ITEM.showLegend))
+                        BarChart(data='{{$item.data}}', series=ITEM.series, x_axis='{{$item.x_axis}}', showLegend=bool(ITEM.showLegend))
                         
                         Button(
                             "×", variant="ghost", size="sm",
