@@ -2,7 +2,7 @@ from neo4j import GraphDatabase
 from data_hull import ChartDataMaker
 
 from prefab_ui.app import PrefabApp
-from prefab_ui.components import Button, Column, ForEach, Row, Text, DataTable, DataTableColumn, Grid, Combobox, ComboboxOption, Label, If, Else, Elif
+from prefab_ui.components import Button, Column, ForEach, Row, Text, DataTable, DataTableColumn, Grid, Combobox, ComboboxOption, Label, If, Else, Elif, Textarea
 from prefab_ui.actions import AppendState, PopState, SetState
 from prefab_ui.rx import Rx, RESULT, ERROR, ITEM
 from prefab_ui.actions.mcp import CallTool
@@ -13,6 +13,7 @@ from fastmcp.tools import tool
 
 import functools
 import plotille
+import re
 
 
 class MCPxNeo4j:
@@ -37,7 +38,7 @@ class MCPxNeo4j:
 
     @_uses_db
     @staticmethod
-    def query_specs(session):
+    def query_all_specs(session):
         members = []
         query = """match (root:SpecificationNode) where not (root)<-[:CONTAINS]-()
 match p=(root)-[:CONTAINS*]->(s:SpecificationNode)
@@ -60,10 +61,24 @@ return s.name, path, s.type, s.occurrence""" #, a.range        optional match (a
         return {'name': spec_name, 'path': spec_path, 'type': spec_type, 'occurrence': spec_occ, 'range': None} #spec_range
 
     @staticmethod
-    def query_values_of_leaf_spec(session, element_id):
+    def query_specs(session, element_ids):
+        query = f"""match (s:SpecificationNode) where elementId(s) IN {str(element_ids)}
+match p=(root)-[:CONTAINS*]->(s) where not (root)<-[:CONTAINS]-()
+with reduce(occ="root", n in nodes(p)[1..]|occ+'.'+n.name) as path, s
+
+return s.name, path, s.type, s.occurrence, elementId(s)""" #, a.range        optional match (a:AnnotationNode) where (a)-[:ANNOTATES]->(s)
+        result = session.run(query)
+        ret = []
+        for spec_name, spec_path, spec_type, spec_occ, spec_id in result: #, spec_range
+            ret.append({'name': spec_name, 'path': spec_path, 'type': spec_type, 'occurrence': spec_occ, 'range': None, 'id': spec_id})#spec_range
+
+        return ret
+
+    @staticmethod
+    def query_value(session, element_id):
         query = f"""match (s:SpecificationNode) where elementId(s) = '{element_id}'
 match (vn:ValueNode) where (s)<-[:IS_SPECIFIED_BY]-(vn)
-return vn.value, vn.occurrence"""
+return CASE vn.value WHEN IS NULL THEN elementId(vn) ELSE vn.value END, vn.occurrence"""
         result = session.run(query)
         ret = {}
         for value, occurrences in result:
@@ -71,23 +86,36 @@ return vn.value, vn.occurrence"""
         return ret
 
     @staticmethod
-    def query_values_of_node_spec(session, element_id):
-        query = f"""match (s:SpecificationNode) where elementId(s) = '{element_id}'
+    def query_values(session, element_ids):
+        query = f"""match (s:SpecificationNode) where elementId(s) IN {str(element_ids)}
 match (vn:ValueNode) where (s)<-[:IS_SPECIFIED_BY]-(vn)
-return elementId(vn), vn.occurrence"""
+with collect([CASE vn.value WHEN IS NULL THEN elementId(vn) ELSE vn.value END, vn.occurrence]) as values, s
+return values, elementId(s)"""
         result = session.run(query)
+
         ret = {}
-        for value, occurrences in result:
-            ret[value] = occurrences
+        for values, e_id in result:
+            temp = {}
+            for v_id, occ in values:
+                temp[v_id] = occ
+            ret[e_id] = temp
         return ret
 
     @_uses_db
     @staticmethod
     def query_score(session, element_id):
         spec_data = MCPxNeo4j.query_spec(session, element_id)
-        option = MCPxNeo4j.query_values_of_node_spec(session, element_id) if spec_data['type'] in ['dict', 'list'] else MCPxNeo4j.query_values_of_leaf_spec(session, element_id)
+        option = MCPxNeo4j.query_value(session, element_id)
 
         return spec_data, option
+
+    @_uses_db
+    @staticmethod
+    def query_scores(session, element_ids):
+        spec_data = MCPxNeo4j.query_specs(session, element_ids)
+        option = MCPxNeo4j.query_values(session, element_ids)
+
+        return [(s_data, option[s_data['id']]) for s_data in spec_data]
 
 
 
@@ -96,7 +124,7 @@ return elementId(vn), vn.occurrence"""
     #@app.ui()
     @staticmethod
     def show_specs():
-        members = MCPxNeo4j.query_specs()
+        members = MCPxNeo4j.query_all_specs()
         with PrefabApp(mode='dark') as app:
             with Column(gap=4, css_class="p-6"):
                 with Grid(columns=[1], gap=4):
@@ -110,6 +138,7 @@ return elementId(vn), vn.occurrence"""
                         search=True,
                     )
         return app
+    
     ###############################
 
     @staticmethod
@@ -187,10 +216,10 @@ return elementId(vn), vn.occurrence"""
         elif spec_data['type'] == 'float':
             return MCPxNeo4j.plot_option(spec_data, options)
 
-    @app.ui()
+    #@app.ui()
     @staticmethod
     def show_option_score():
-        members = MCPxNeo4j.query_specs()
+        members = MCPxNeo4j.query_all_specs()
 
         with PrefabApp(mode='dark') as app:
             options = Rx("options")
@@ -225,22 +254,70 @@ return elementId(vn), vn.occurrence"""
                     
         return app
 
-            
 
     ############################
 
+    @app.tool()
+    @staticmethod
+    def process_text(text, members, sep=" "):
+        elements = re.split(sep, text)
+
+        found_elements = []
+        for m in members:
+            for e in elements:
+                if e == m['path']:
+                    found_elements.append(m['id'])
+                    break
+                elif e == m['id']:
+                    found_elements.append(e)
+                    break
+
+        spec_data_option = MCPxNeo4j.query_scores(found_elements)
+        ret = []
+
+        for spec_data, options in spec_data_option:
+            if spec_data['type'] in ['bool', 'int', 'str', 'list', 'dict']:
+                ret.append(MCPxNeo4j.histogram_option(spec_data, options))
+            elif spec_data['type'] == 'float':
+                ret.append(MCPxNeo4j.plot_option(spec_data, options))
+        return ret
 
 
 
-if __name__ == '__main__':
+    @app.ui()
+    @staticmethod
+    def show_option_score_text():
+        members = MCPxNeo4j.query_all_specs()
 
-    URI = "bolt://localhost:7687"
-    AUTH = ("neo4j", "password")
-    mcp = FastMCP("My First App")
+        with PrefabApp(mode='dark') as app:
+            options = Rx("options")
+            with Column(gap=3):
 
-    test = MCPxNeo4j(URI, auth=AUTH)
-    test.event_option('4:f766f605-3643-4f9c-8554-440a213da53a:346')
+                with Row(gap=10):
+                    ta = Textarea(rows=5, placeholder="root.environment.environment.eos-model or 4:f766f605-3643-4f9c-8554-440a213da53a:380")
+                    Button("process", variant="outline", 
+                           on_click=CallTool(MCPxNeo4j.process_text,
+                                             arguments={'text': ta.rx, 'members': members}, 
+                                             on_success=AppendState(options, RESULT), on_error=AppendState(options, ERROR)))
+
+                with ForEach(options):
+                    with Row(gap=2):
+                        with Column(gap=2):
+                            with ForEach(ITEM):
+                                with Column(gap=2):
+                                    Text(ITEM.name, align='center')
+                                    
+                                    with If(ITEM.view == 'Histo'):
+                                        BarChart(data=ITEM.data, series=[ChartSeries(data_key = 'count', label='Occurrences')], x_axis='value', horizontal=True, showLegend=True)
+                                    with Elif(ITEM.view == 'Plot'):
+                                        LineChart(data=ITEM.data, series=[ChartSeries(data_key="y", label="Hull", color='blue'), ChartSeries(data_key="score", label="Score of New Option", color='green')],
+                                                x_axis="x", height=500, showLegend=True, showGrid=True)
+                                                
+                        Button(
+                            "×", variant="ghost", size="sm",
+                            on_click=PopState(options, "{{ $index }}"),
+                        )
+        return app
 
 
-else:
-    mcp = FastMCP("Panoramix Server", providers=[MCPxNeo4j.app])
+mcp = FastMCP("Panoramix Server", providers=[MCPxNeo4j.app])
