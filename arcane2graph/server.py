@@ -131,18 +131,9 @@ return elementId(vn), vn.occurrence"""
             options_data['undefined'] = spec_data['occurrence'] - nb_occ_data
         
         MCPxNeo4j.chart_as_string(options_data)
-        data = [{'value': value, 'count': occ} for value, occ in options_data.items()]
-        
-        return {'data': data, 'series': [ChartSeries(dataKey='count', label='Occurrence Count')], 'x_axis': 'value', 'showLegend': True}
-        #return f"{{'data': {data}, 'series': {ChartSeries(dataKey='count', label='Occurrence Count')}, 'x_axis': 'value', 'showLegend': {True}}}"
-        return  BarChart(
-                   data=data,
-                   series=[ChartSeries(dataKey='count', label='Occurrence Count')],
-                   x_axis='value',
-                   height=100,
-                   showLegend=True
-                )
-        
+        data = [{'value': str(value), 'count': occ} for value, occ in options_data.items()]
+
+        return data
 
     @staticmethod
     def plot_as_string(x, y, x_score, score, x_of_values, score_of_values, x_scale='linear'):
@@ -211,14 +202,13 @@ return elementId(vn), vn.occurrence"""
 
         with PrefabApp(mode='dark') as app:
             options = Rx("options")
-            with Column(gap=3, css_class="w-fit mx-auto"):
+            with Column(gap=3):
                 with Combobox(placeholder="Search options", 
                             searchPlaceholder="Filter by path",
-                            onChange=[#AppendState(options, '{{$event}}'), 
-                                        CallTool(MCPxNeo4j.event_option, 
-                                                arguments={"element_id": "{{$event}}"}, 
-                                                on_success=AppendState(options, RESULT), 
-                                                on_error=AppendState(options, ERROR))],
+                            onChange=[CallTool(MCPxNeo4j.event_option, 
+                                        arguments={"element_id": "{{$event}}"}, 
+                                        on_success=AppendState(options, RESULT), 
+                                        on_error=AppendState(options, ERROR))],
                             css_class="w-fit mx-auto",
                             align='center'
                             ):
@@ -228,13 +218,8 @@ return elementId(vn), vn.occurrence"""
                 with ForEach(options):
                     with Row(gap=2):
 
-                        #Text(str(ITEM.data))
-                        #Text(ITEM.x_axis)
-                        #Text(str(ITEM.x_axis))
-                        #Text(f".{ITEM.showLegend}.")
-                        #Text(f".{str(ITEM.showLegend)}.")
                         
-                        BarChart(data='{{$item.data}}', series=ITEM.series, x_axis='{{$item.x_axis}}', showLegend=bool(ITEM.showLegend))
+                        BarChart(data=ITEM, series=[ChartSeries(data_key = 'count', label='Occurrences')], x_axis='value', horizontal=True, showLegend=True)
                         
                         Button(
                             "×", variant="ghost", size="sm",
@@ -242,6 +227,7 @@ return elementId(vn), vn.occurrence"""
                         )
                     
         return app
+
             
 
     ############################
