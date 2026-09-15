@@ -2,7 +2,7 @@ from neo4j import GraphDatabase
 from data_hull import ChartDataMaker
 
 from prefab_ui.app import PrefabApp
-from prefab_ui.components import Button, Column, ForEach, Row, Text, DataTable, DataTableColumn, Grid, Combobox, ComboboxOption, Label, If, Else
+from prefab_ui.components import Button, Column, ForEach, Row, Text, DataTable, DataTableColumn, Grid, Combobox, ComboboxOption, Label, If, Else, Elif
 from prefab_ui.actions import AppendState, PopState, SetState
 from prefab_ui.rx import Rx, RESULT, ERROR, ITEM
 from prefab_ui.actions.mcp import CallTool
@@ -93,7 +93,7 @@ return elementId(vn), vn.occurrence"""
 
 #################### mcp ui objects ####################
 
-    @app.ui()
+    #@app.ui()
     @staticmethod
     def show_specs():
         members = MCPxNeo4j.query_specs()
@@ -126,14 +126,16 @@ return elementId(vn), vn.occurrence"""
     @staticmethod
     def histogram_option(spec_data, options_data):
         print('HISTO')
+
         nb_occ_data = sum(options_data.values())
         if spec_data['occurrence'] != nb_occ_data:
-            options_data['undefined'] = spec_data['occurrence'] - nb_occ_data
+            difference = spec_data['occurrence'] - nb_occ_data
+            if difference > 0 : options_data['undefined'] = difference
         
         MCPxNeo4j.chart_as_string(options_data)
         data = [{'value': str(value), 'count': occ} for value, occ in options_data.items()]
 
-        return data
+        return {'data': data, 'name': spec_data['name'], 'view': 'Histo'}
 
     @staticmethod
     def plot_as_string(x, y, x_score, score, x_of_values, score_of_values, x_scale='linear'):
@@ -171,17 +173,7 @@ return elementId(vn), vn.occurrence"""
                 counter += 1
             graph_data.append(temp)
 
-        with Grid(columns=[1], gap=4) as grid:
-            LineChart(
-                data=graph_data,
-                series=[ChartSeries(data_key="y", label="Hull", color='blue'),
-                        ChartSeries(data_key="score", label="Score of New Option", color='green')],
-                x_axis="x",
-                height=500,
-                showLegend=True,
-                showGrid=True,
-            )
-        return grid
+        return {'data': graph_data, 'name': spec_data['name'], 'view': 'Plot'}
 
     @app.tool()
     @staticmethod
@@ -207,8 +199,8 @@ return elementId(vn), vn.occurrence"""
                             searchPlaceholder="Filter by path",
                             onChange=[CallTool(MCPxNeo4j.event_option, 
                                         arguments={"element_id": "{{$event}}"}, 
-                                        on_success=AppendState(options, RESULT), 
-                                        on_error=AppendState(options, ERROR))],
+                                        on_success=AppendState(options, RESULT, index=0), 
+                                        on_error=AppendState(options, ERROR, index=0))],
                             css_class="w-fit mx-auto",
                             align='center'
                             ):
@@ -216,15 +208,20 @@ return elementId(vn), vn.occurrence"""
                         ComboboxOption(data['path'], value=data['id'])
 
                 with ForEach(options):
-                    with Row(gap=2):
-
-                        
-                        BarChart(data=ITEM, series=[ChartSeries(data_key = 'count', label='Occurrences')], x_axis='value', horizontal=True, showLegend=True)
-                        
-                        Button(
-                            "×", variant="ghost", size="sm",
-                            on_click=PopState(options, "{{ $index }}"),
-                        )
+                    with Column(gap=2):
+                        Text(ITEM.name, align='center')
+                        with Row(gap=2):
+                            with If(ITEM.view == 'Histo'):
+                                BarChart(data=ITEM.data, series=[ChartSeries(data_key = 'count', label='Occurrences')], x_axis='value', horizontal=True, showLegend=True)
+                            with Elif(ITEM.view == 'Plot'):
+                                LineChart(data=ITEM.data, series=[ChartSeries(data_key="y", label="Hull", color='blue'), ChartSeries(data_key="score", label="Score of New Option", color='green')],
+                                          x_axis="x", height=500, showLegend=True, showGrid=True)
+                                            
+                            
+                            Button(
+                                "×", variant="ghost", size="sm",
+                                on_click=PopState(options, "{{ $index }}"),
+                            )
                     
         return app
 
