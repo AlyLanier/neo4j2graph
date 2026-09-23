@@ -2,10 +2,11 @@ from neo4j import GraphDatabase
 from data_hull import ChartDataMaker
 
 from prefab_ui.app import PrefabApp
-from prefab_ui.components import Button, Column, ForEach, Row, Text, DataTable, DataTableColumn, Grid, GridItem, Combobox, ComboboxOption, Label, If, Else, Elif, Textarea, Div, P, Container
+from prefab_ui.components import Button, Column, ForEach, Row, Text, DataTable, DataTableColumn, Grid, GridItem, Combobox, ComboboxOption, Label, If, Else, Elif, Textarea, Div, P, Container, H2
 from prefab_ui.actions import CallHandler, AppendState, PopState, SetState
 from prefab_ui.rx import Rx, RESULT, ERROR, ITEM, EVENT, INDEX
 from prefab_ui.actions.mcp import CallTool
+from prefab_ui.css import Responsive
 
 from prefab_ui.components.charts import LineChart, BarChart, ChartSeries
 from fastmcp import FastMCP, FastMCPApp
@@ -49,9 +50,10 @@ class MCPxNeo4j:
         query = """match (root:SpecificationNode) where not (root)<-[:CONTAINS]-()
 return 'root' as name, root.type AS type, 'root' as path, elementId(root) AS id
 UNION
+match (root:SpecificationNode) where not (root)<-[:CONTAINS]-()
 match p=(root)-[:CONTAINS*]->(s:SpecificationNode)
 with reduce(occ="root", n in nodes(p)[1..]|occ+'.'+n.name) as path, s as spec
-return spec.name AS name, spec.type AS type, path, elementId(spec) AS id"""
+return spec.name AS name, spec.type AS type, path, elementId(spec) AS id ORDER BY path"""
         result = session.run(query)
         for n, t, p, uri in result:
             members.append({'name': n, 'type': t, 'path': p, 'id': uri})
@@ -133,7 +135,7 @@ return values, elementId(s)"""
 
     ############# All Specs as table #################""
 
-    #@app.ui()
+    @app.ui()
     @staticmethod
     def show_specs():
         with PrefabApp(mode='dark') as app:
@@ -225,7 +227,7 @@ return values, elementId(s)"""
         elif spec_data['type'] == 'float':
             return MCPxNeo4j.plot_option(spec_data, options)
 
-    #@app.ui()
+    @app.ui()
     @staticmethod
     def show_option_score():
         with PrefabApp(mode='dark') as app:
@@ -442,11 +444,11 @@ return _1n, weight, _2n"""
         elements = re.split(sep, text)
         return MCPxNeo4j.get_combinatorial_coverage([MCPxNeo4j.db_identifier + e for e in elements])
 
-    @app.ui()
+    #@app.ui()
     @staticmethod
     def show_combinatorial_coverage():
         with PrefabApp(mode='dark') as app:
-            options = Rx("options", [])
+            #options = Rx("options", [])
             heat_data = Rx("data")
             is_process = Rx("process")
             with Column(gap=3):
@@ -487,11 +489,20 @@ return _1n, weight, _2n"""
                     
                 with If(is_process):
                     #Text(heat_data)
+                    
                     with Row(gap = 1):
                         with Column(gap = 2):
-                            Text("coucou", align='center')
-
+                            H2("Heat Map", align='center')
                             with Row(gap = 2):
+                                with Grid(columns=Responsive(), gap=0):
+                                    pass
+
+                                Div(css_class="w-10 border", style={
+                                    "background": "linear-gradient(to top, #00FF00 0%, #FF0000 100%)"
+                                })
+
+
+                                '''
                                 size = 11
                                 colors = ["#5BCEFA", "#F5A9B8", "#FFFFFF", "#F5A9B8", "#5BCEFA"]
                                 specs = [str(i) for i in range(size-1)]
@@ -510,7 +521,7 @@ return _1n, weight, _2n"""
 
                                 Div(css_class="w-10 border", style={
                                     "background": "linear-gradient(to top, #5BCEFA 0%, #F5A9B8 30%, #FFFFFF 50%, #F5A9B8 70%, #5BCEFA 100%)"
-                                })
+                                })'''
 
                                 
 
