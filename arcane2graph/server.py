@@ -2,7 +2,7 @@ from neo4j import GraphDatabase
 from data_hull import ChartDataMaker
 
 from prefab_ui.app import PrefabApp
-from prefab_ui.components import Button, Column, ForEach, Row, Text, DataTable, DataTableColumn, Grid, GridItem, Combobox, ComboboxOption, Label, If, Else, Elif, Textarea, Div, P, Container, H2
+from prefab_ui.components import Button, Column, ForEach, Row, Text, DataTable, DataTableColumn, Grid, GridItem, Combobox, ComboboxOption, Label, If, Else, Elif, Textarea, Div, P, Container, H2, Tooltip
 from prefab_ui.actions import CallHandler, AppendState, PopState, SetState
 from prefab_ui.rx import Rx, RESULT, ERROR, ITEM, EVENT, INDEX
 from prefab_ui.actions.mcp import CallTool
@@ -10,7 +10,6 @@ from prefab_ui.css import Responsive
 
 from prefab_ui.components.charts import LineChart, BarChart, ChartSeries
 from fastmcp import FastMCP, FastMCPApp
-from fastmcp.tools import tool
 
 import functools
 import plotille
@@ -135,7 +134,7 @@ return values, elementId(s)"""
 
     ############# All Specs as table #################""
 
-    @app.ui()
+    #@app.ui()
     @staticmethod
     def show_specs():
         with PrefabApp(mode='dark') as app:
@@ -227,7 +226,7 @@ return values, elementId(s)"""
         elif spec_data['type'] == 'float':
             return MCPxNeo4j.plot_option(spec_data, options)
 
-    @app.ui()
+    #@app.ui()
     @staticmethod
     def show_option_score():
         with PrefabApp(mode='dark') as app:
@@ -393,7 +392,7 @@ return reduce(occ=sn.name, n in nodes(p)[1..]|occ+'.'+n.name) as path, collect(v
 MATCH (root:SpecificationNode) WHERE NOT (root)<-[:CONTAINS]-()
 MATCH p=(root)-[:CONTAINS*]->(s:SpecificationNode)<-[:IS_SPECIFIED_BY]-(vn)
 WITH vn, reduce(occ="root", n in nodes(p)[1..-1]|occ+'.'+n.name) as path
-RETURN collect(elementId(vn)), path"""
+RETURN collect([elementId(vn), vn.value]), path"""
         result = session.run(query)
         ret = {}
         for elements_ids, path in result:
@@ -422,12 +421,54 @@ return _1n, weight, _2n"""
     @staticmethod
     def add_element(dic: dict[str, list[tuple[str, float]]], node1, weight, node2):
         node_id = node1.element_id
+        heat_value = weight/node1["occurrence"]
         if node_id in dic:
-            dic[node_id].append((node2.element_id, weight/node1["occurrence"]))
+            dic[node_id].append((node2.element_id, heat_value))
         else:
-            dic[node_id] = [(node2.element_id, weight/node1["occurrence"])]
+            dic[node_id] = [(node2.element_id, heat_value)]
 
-    @app.tool()
+    @staticmethod
+    def heat_color(heat):
+        """Black (0.0) -> Green (0.x) -> red (1)."""
+        
+        t = float(heat)
+        if t == 0.0: return "#000000"
+        return f"#{round(255 * t):02X}{round(255 * (1 - t)):02X}00"
+
+    @staticmethod
+    def build_matrix(element_ids, elements, mapping):
+        def short(eid):
+            return eid.rsplit(":", 1)[-1]
+
+        """Render-ready (N+1)x(N+1) cell list, row-major, for the heat map grid."""
+        id_to_path = {eid: (path, value) if value is not None else (path, short(eid)) for path, eids in mapping.items() for eid, value in eids}
+        max_value_length = max([len(str(value)) for _, eids in mapping.items() for _, value in eids])
+        ids = [e for e in dict.fromkeys(element_ids) if e]
+
+        cells = [{"color": "#262626", "text": "", "tip": "values"}]
+        cells += [
+            {"color": "#525252", "text": id_to_path.get(e, ("", e))[1], "tip": f"value: {id_to_path.get(e, ("", e))[1]}\nfrom: {id_to_path.get(e, (e, ""))[0]}"}
+            for e in ids
+        ]
+        for row_id in ids:
+            cells.append(
+                {"color": "#525252", "text": id_to_path.get(row_id, ("", row_id))[1], "tip": f"value: {id_to_path.get(row_id, ("", row_id))[1]}\nfrom: {id_to_path.get(row_id, (row_id, ""))[0]}"}
+            )
+            related = dict(elements.get(row_id) or [])
+            for col_id in ids:
+                
+                heat = related.get(col_id, 0.0)
+                cells.append({
+                    "color": MCPxNeo4j.heat_color(heat),
+                    "text": "",
+                    "tip": f"{id_to_path[row_id][1]} × {id_to_path[col_id][1]} — {round(heat * 100)}%",
+                })
+
+        return {
+            "gridTemplateColumns": f"minmax({max_value_length*8}px, 2fr) repeat({len(ids)}, minmax(0, 1fr))",
+            "cells": cells,
+        }
+
     @staticmethod
     def get_combinatorial_coverage(element_ids):
         relations, mapping = MCPxNeo4j.query_combinatorial_coverage(element_ids)
@@ -440,95 +481,72 @@ return _1n, weight, _2n"""
 
     @app.tool()
     @staticmethod
-    def process_text_combinatorial_coverage(text, sep = " "):
-        elements = re.split(sep, text)
-        return MCPxNeo4j.get_combinatorial_coverage([MCPxNeo4j.db_identifier + e for e in elements])
+    def process_text_combinatorial_coverage(text, sep=r"\s+"):
+        ids = [MCPxNeo4j.db_identifier + e for e in re.split(sep, text) if e]
+        payload = MCPxNeo4j.get_combinatorial_coverage(ids)
+        payload["matrix"] = MCPxNeo4j.build_matrix(
+            ids, payload["elements"], payload["mapping"]
+        )
+        return payload
 
-    #@app.ui()
+    @app.ui()
     @staticmethod
     def show_combinatorial_coverage():
         with PrefabApp(mode='dark') as app:
-            #options = Rx("options", [])
             heat_data = Rx("data")
             is_process = Rx("process")
             with Column(gap=3):
                 with Row(gap=10):
-                    ta = Textarea(rows=5, placeholder="root.environment.environment.eos-model or 4:f766f605-3643-4f9c-8554-440a213da53a:380")
-                    Button("process", variant="outline", 
-                            on_click=[
-                                SetState(is_process, True),
-                                CallTool(MCPxNeo4j.process_text_combinatorial_coverage,
-                                         arguments={'text': ta.rx}, 
-                                         on_success=SetState(heat_data, RESULT), on_error=SetState(heat_data, ERROR))])
+                    ta = Textarea(
+                        rows=5,
+                        placeholder="",
+                        value="279 265 217",
+                    )
+                    Button(
+                        "process",
+                        variant="outline",
+                        on_click=[
+                            SetState(is_process, True),
+                            CallTool(
+                                MCPxNeo4j.process_text_combinatorial_coverage,
+                                arguments={"text": ta.rx},
+                                on_success=SetState(heat_data, RESULT),
+                                on_error=SetState(heat_data, ERROR),
+                            ),
+                        ],
+                    )
 
-                    '''
-                    with Combobox(placeholder="Search options", 
-                                searchPlaceholder="Filter by path",
-                                onChange=[AppendState(options, EVENT)],
-                                css_class="w-fit mx-auto",
-                                align='center'
-                                ):
-                        for data in MCPxNeo4j.members:
-                            ComboboxOption(data['path'])
-                    
-
-                    Button("process", variant="outline", 
-                           on_click=[SetState(is_process, True), 
-                                     CallTool(MCPxNeo4j.get_combinatorial_coverage,
-                                              arguments = {"paths": options},
-                                              on_success = SetState(heat_data, RESULT),
-                                              on_error = SetState(heat_data, ERROR))])
-                
-                with Grid(columns=3): #TODO maybe let elements place themselves next to one another and wrapping at end of screen IF POSSIBLE
-                    with ForEach(options):
-                        with Row(gap=1):
-                            Text(ITEM)
-                            Button("×", variant="ghost", size="sm", on_click=PopState(options, INDEX))'''
-
-                
-                    
                 with If(is_process):
-                    #Text(heat_data)
-                    
-                    with Row(gap = 1):
-                        with Column(gap = 2):
-                            H2("Heat Map", align='center')
-                            with Row(gap = 2):
-                                with Grid(columns=Responsive(), gap=0):
-                                    pass
-
-                                Div(css_class="w-10 border", style={
-                                    "background": "linear-gradient(to top, #00FF00 0%, #FF0000 100%)"
-                                })
-
-
-                                '''
-                                size = 11
-                                colors = ["#5BCEFA", "#F5A9B8", "#FFFFFF", "#F5A9B8", "#5BCEFA"]
-                                specs = [str(i) for i in range(size-1)]
-                                with Grid(columns=size, gap=0, align="center"):
-                                    for i in range(size):
-                                        color = colors[(i-1)//2]
-                                        for j in range(size):
-                                            if i == 0 or j == 0:
-                                                with Div(css_class=f"h-10 border items-center", style={"background-color": "black"}):
-                                                    if i==0 and j>0:
-                                                        P(specs[j-1], align='center')
-                                                    elif j==0 and i>0:
-                                                        P(specs[i-1], align='center')
-                                            else:
-                                                Div(css_class=f"h-10 border", style={"background-color": color})
-
-                                Div(css_class="w-10 border", style={
-                                    "background": "linear-gradient(to top, #5BCEFA 0%, #F5A9B8 30%, #FFFFFF 50%, #F5A9B8 70%, #5BCEFA 100%)"
-                                })'''
-
-                                
+                    with Row(gap=1, justify="center"):
+                        with Column(gap=2, css_class="flex-1"):
+                            H2("Heat Map", align="center")
+                            with If(heat_data.matrix):
+                                with Row(gap=2, align="center", justify="center"):
+                                    with Div(
+                                        css_class="grid gap-px overflow-hidden rounded-lg border border-neutral-700 bg-neutral-700",
+                                        style={"gridTemplateColumns": "{{ data.matrix.gridTemplateColumns }}"},
+                                        align="center"
+                                    ):
+                                        with ForEach("data.matrix.cells"):
+                                            with Tooltip(ITEM.tip, delay=0):
+                                                with Div(
+                                                    css_class="flex h-9 w-full items-center justify-center font-mono text-[10px] text-neutral-100",
+                                                    style={"backgroundColor": "{{ $item.color }}"},
+                                                ):
+                                                    P(ITEM.text, align="center")
+                                    with Column(gap=1, css_class="w-fit self-stretch"):
+                                        Text("100%", css_class="text-[10px] text-neutral-400")
+                                        Div(
+                                            css_class="w-8 flex-1 rounded border border-neutral-700",
+                                            style={"background": "linear-gradient(to top, #00FF00 0%, #FF0000 100%)"},
+                                        )
+                                        Text("0%", css_class="text-[10px] text-neutral-400")
+                            with Else():
+                                Text(heat_data, css_class="text-sm text-neutral-400")
 
                         Button("×", variant="ghost", size="sm", on_click=SetState(is_process, False))
-                                
-
         return app
+    
 
 
 MCPxNeo4j.set_members()
