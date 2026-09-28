@@ -546,7 +546,51 @@ return _1n, weight, _2n"""
 
                         Button("×", variant="ghost", size="sm", on_click=SetState(is_process, False))
         return app
-    
+
+    ##################### combinatorial comparative coverage ################
+
+    @_uses_db
+    @staticmethod
+    def query_combinatorial_comparative_coverage(spec_id1, spec_id2, session = None):
+        query = f"""CALL(){{
+        match (s:SpecificationNode) where elementId(s) = "{spec_id1}"
+        match (vn:ValueNode) where (vn)-[:IS_SPECIFIED_BY]->(s)
+        return vn
+
+        UNION
+
+        match (s:SpecificationNode) where elementId(s) = "{spec_id2}"
+        match (vn:ValueNode) where (vn)-[:IS_SPECIFIED_BY]->(s)
+        return vn
+    }}
+    WITH vn
+
+    MATCH (root:ValueNode) WHERE NOT (root)<-[:CONTAINS]-()
+    MATCH (vn) WHERE (root)-[:CONTAINS*]->(vn) 
+    WITH collect(vn) AS coverage, root AS _
+    UNWIND apoc.coll.combinations(coverage, 2) as node_couple
+    WITH node_couple, count(node_couple) AS weight
+    CALL apoc.coll.elements(node_couple) YIELD _1n, _2n
+    match (_1n)-[:IS_SPECIFIED_BY]->(s)
+    return _1n, weight, _2n order by s"""
+        result = session.run(query)
+        ret = []
+        for n1, w, n2 in result:
+            ret.append((n1, w, n2))
+        
+        return ret, MCPxNeo4j.path_ids_map_of_valuenodes([element_ids], session)
+
+    @staticmethod
+    def get_combinatorial_comparative_coverage(spec_id1, spec_id2):
+        relations = MCPxNeo4j.query_combinatorial_comparative_coverage(spec_id1, spec_id2)#, mapping
+        
+        elements = {}
+        for n1, w, n2 in relations:
+            MCPxNeo4j.add_element(elements, n1, w, n2)
+        for n1, w, n2 in relations:
+            MCPxNeo4j.add_element(elements, n2, w, n1)
+
+        return elements
 
 
 MCPxNeo4j.set_members()
